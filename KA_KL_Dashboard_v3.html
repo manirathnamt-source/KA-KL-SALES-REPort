@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KA & KL — Store Dashboard FY 26-27</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --ink:#0f1117;--ink2:#3d4152;--ink3:#7c8099;
+  --paper:#f8f8f6;--paper2:#ffffff;--paper3:#ededea;
+  --line:#e2e2de;--line2:#c8c8c2;
+  --blue:#1c52a3;--blue-l:#ebf2fc;--blue-m:#b8d0f4;
+  --red:#c0392b;--red-l:#fdf2f1;--red-m:#f5c6c2;
+  --green:#1e7d45;--green-l:#edf7f1;--green-m:#a8dbbe;
+  --amber:#b35900;--amber-l:#fdf3e7;--amber-m:#f5c07a;
+  --purple:#6c3eb3;--purple-l:#f0ebfc;--purple-m:#c8b0ee;
+  --r:6px;--rl:10px;
+}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'DM Sans',sans-serif;background:var(--paper);color:var(--ink);font-size:13px;}
+
+/* ── Shell ── */
+.shell{display:grid;grid-template-rows:44px 44px 44px 38px 36px 1fr;height:100vh;}
+
+/* ── Top bar ── */
+.topbar{background:var(--ink);color:#fff;padding:0 18px;display:flex;align-items:center;gap:12px;}
+.logo{font-size:15px;font-weight:700;letter-spacing:-.3px;flex:1;}
+.logo em{color:#6eb5ff;font-style:normal;}
+.sdot{width:7px;height:7px;border-radius:50%;background:#4caf78;}
+.sdot.warn{background:#f5a623;}.sdot.err{background:#e74c3c;}
+.chip{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:3px 10px;font-size:11px;font-family:'DM Mono',monospace;}
+.tb-btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:var(--r);padding:4px 10px;font-size:11px;cursor:pointer;}
+.tb-btn:hover{background:rgba(255,255,255,.2);}
+
+/* ── Connect bar ── */
+.conn-bar{background:var(--paper2);border-bottom:1px solid var(--line);padding:0 18px;display:flex;align-items:center;gap:8px;}
+.url-inp{flex:1;min-width:200px;font-size:11px;padding:4px 8px;border:1px solid var(--line2);border-radius:var(--r);background:var(--paper);color:var(--ink);font-family:'DM Mono',monospace;}
+.url-inp:focus{outline:none;border-color:var(--blue);}
+select,button{font-family:'DM Sans',sans-serif;}
+select{font-size:11px;padding:4px 7px;border:1px solid var(--line2);border-radius:var(--r);background:var(--paper);color:var(--ink);cursor:pointer;}
+button{font-size:11px;padding:4px 10px;border-radius:var(--r);border:1px solid var(--line2);background:var(--paper);color:var(--ink);cursor:pointer;}
+button:hover{background:var(--paper3);}
+.bp{background:var(--blue);color:#fff;border-color:var(--blue);font-weight:500;}
+.bp:hover{background:#163e82;}
+.bdl{background:var(--green-l);color:var(--green);border-color:var(--green-m);}
+.brst{background:var(--red-l);color:var(--red);border-color:var(--red-m);}
+label.lbl{font-size:11px;color:var(--ink3);font-weight:500;}
+
+/* ── Users bar ── */
+.ubar{background:#ebf2fc;border-bottom:1px solid var(--blue-m);padding:0 18px;display:none;align-items:center;gap:8px;min-height:34px;}
+.uchip{display:flex;align-items:center;gap:4px;background:#fff;border:1px solid var(--blue-m);border-radius:20px;padding:2px 8px;font-size:11px;}
+.uav{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;}
+
+/* ── Tab nav ── */
+.tabnav{background:var(--paper2);border-bottom:2px solid var(--line);padding:0 18px;display:flex;gap:0;overflow-x:auto;}
+.tab{padding:8px 16px;font-size:12px;font-weight:500;color:var(--ink3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;display:flex;align-items:center;gap:5px;}
+.tab:hover{color:var(--ink);}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:600;}
+
+/* ── Filter strip ── */
+.fstrip{background:var(--paper2);border-bottom:1px solid var(--line);padding:0 18px;display:flex;align-items:center;gap:8px;overflow-x:auto;}
+.fstrip select{font-size:11px;padding:3px 6px;}
+.fsep{width:1px;height:16px;background:var(--line2);flex-shrink:0;}
+.badge{font-size:10px;font-weight:600;color:var(--blue);background:var(--blue-l);border-radius:20px;padding:1px 8px;white-space:nowrap;}
+
+/* ── Info bar ── */
+.ibar{padding:6px 18px;font-size:12px;display:none;border-bottom:1px solid transparent;flex-shrink:0;}
+.ibar.inf{background:var(--blue-l);color:#1040a0;border-color:var(--blue-m);}
+.ibar.wrn{background:var(--amber-l);color:#804000;border-color:var(--amber-m);}
+.ibar.err{background:var(--red-l);color:#8b1a10;border-color:var(--red-m);}
+
+/* ── Content ── */
+.content{overflow-y:auto;overflow-x:hidden;padding:14px 18px 40px;}
+.panel{display:none;}.panel.active{display:block;}
+
+/* ── KPI strip ── */
+.ks{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:7px;margin-bottom:16px;}
+.kc{background:var(--paper2);border:1px solid var(--line);border-radius:var(--rl);padding:9px 11px;}
+.kc .kl{font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;}
+.kc .kv{font-size:17px;font-weight:700;letter-spacing:-.4px;}
+.kc .ks2{font-size:10px;margin-top:2px;color:var(--ink3);}
+.kc.red{background:var(--red-l);border-color:var(--red-m);}
+.kc.grn{background:var(--green-l);border-color:var(--green-m);}
+.kc.amb{background:var(--amber-l);border-color:var(--amber-m);}
+
+/* ── Section header ── */
+.sh{display:flex;align-items:center;gap:10px;margin:16px 0 7px;}
+.sh-t{font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;}
+.sh-l{flex:1;height:1px;background:var(--line);}
+.sh-a{display:flex;gap:5px;}
+
+/* ── Tables ── */
+.tw{overflow-x:auto;border-radius:var(--rl);border:1px solid var(--line);margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+table{width:100%;border-collapse:collapse;font-size:12px;background:var(--paper2);}
+thead{position:sticky;top:0;z-index:2;}
+th{padding:6px 9px;text-align:left;font-weight:600;font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:.04em;border-bottom:2px solid var(--line);background:#f4f4f0;white-space:nowrap;cursor:pointer;user-select:none;}
+th:hover{background:#eeeee8;}
+th.r{text-align:right;}
+th.asc::after{content:' ▲';font-size:8px;}
+th.desc::after{content:' ▼';font-size:8px;}
+td{padding:5px 9px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle;}
+td.r{text-align:right;font-family:'DM Mono',monospace;font-size:11px;}
+td.dim{color:var(--ink3);}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#fafafa;}
+tr.rr td{background:#fff8f8;}
+tr.rr:hover td{background:#fff3f3;}
+tr.ft td{background:#f0f0ec;font-weight:700;border-top:2px solid var(--line2);}
+
+/* Colour classes */
+.rv{color:var(--red);font-weight:700;}
+.gv{color:var(--green);font-weight:700;}
+.av{color:var(--amber);font-weight:700;}
+.pv{color:var(--purple);font-weight:700;}
+
+/* ── Bar ── */
+.bar-c{display:flex;align-items:center;gap:6px;min-width:80px;}
+.bar-t{flex:1;height:5px;background:var(--line);border-radius:3px;overflow:hidden;}
+.bar-f{height:100%;border-radius:3px;}
+.bar-p{font-size:11px;font-weight:700;min-width:34px;text-align:right;font-family:'DM Mono',monospace;}
+
+/* ── Day fixed columns ── */
+.dfx{position:sticky;left:0;background:var(--paper2);z-index:1;}
+tr:hover .dfx{background:#fafafa;}
+th.dfx{background:#f4f4f0;z-index:3;}
+.dfx2{position:sticky;left:68px;background:var(--paper2);z-index:1;}
+th.dfx2{background:#f4f4f0;z-index:3;}
+tr:hover .dfx2{background:#fafafa;}
+
+/* ── Alert cards (Audit) ── */
+.alert-card{border-radius:var(--rl);border:1px solid;padding:10px 14px;margin-bottom:10px;}
+.alert-card.red{background:var(--red-l);border-color:var(--red-m);}
+.alert-card.amber{background:var(--amber-l);border-color:var(--amber-m);}
+.alert-card.green{background:var(--green-l);border-color:var(--green-m);}
+.alert-card .ah{font-size:12px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+.alert-count{font-size:11px;font-weight:600;background:rgba(0,0,0,.08);border-radius:20px;padding:1px 8px;}
+
+/* ── Weekly comparison ── */
+.week-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px;}
+.week-card{background:var(--paper2);border:1px solid var(--line);border-radius:var(--rl);padding:10px 12px;}
+.week-card .wh{font-size:11px;font-weight:600;color:var(--ink2);margin-bottom:8px;display:flex;justify-content:space-between;}
+.week-card .wv{font-size:18px;font-weight:700;}
+.week-card .ws{font-size:10px;color:var(--ink3);margin-top:2px;}
+
+/* ── Modal ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:1000;align-items:center;justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--paper2);border-radius:var(--rl);width:90%;max-width:540px;max-height:88vh;overflow-y:auto;box-shadow:0 16px 50px rgba(0,0,0,.2);}
+.mhd{padding:13px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:start;position:sticky;top:0;background:var(--paper2);z-index:1;}
+.mbd{padding:13px 16px;}
+.mcl{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;color:var(--ink3);}
+.mcl:hover{background:var(--paper3);}
+
+/* ── KPI progress card in modal ── */
+.kpi-prog{border-radius:var(--r);border:1px solid;padding:9px 12px;margin-bottom:8px;}
+.kpi-prog.green{background:var(--green-l);border-color:var(--green-m);}
+.kpi-prog.red{background:var(--red-l);border-color:var(--red-m);}
+.kpi-prog.grey{background:var(--paper3);border-color:var(--line2);}
+.kpi-prog .kph{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;}
+.kpi-prog .kpn{font-size:12px;font-weight:600;}
+.kpi-prog .kps{font-size:11px;font-weight:700;}
+.kpi-prog .kpg{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;font-size:11px;}
+.kpi-prog .kg-l{font-size:9px;color:var(--ink3);text-transform:uppercase;margin-bottom:2px;}
+.kpi-prog .kg-v{font-weight:600;}
+.prog-bar{height:5px;background:var(--line);border-radius:3px;margin-top:6px;overflow:hidden;}
+.prog-fill{height:100%;border-radius:3px;}
+
+::-webkit-scrollbar{width:6px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px;}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">KA &amp; KL <em>Store Dashboard</em> — FY 2026-27</div>
+  <div class="chip"><span class="sdot" id="sdot"></span><span id="stxt">Not connected</span></div>
+  <button class="tb-btn" onclick="doRefresh()">↻ Refresh</button>
+  <button class="tb-btn" onclick="window.print()">⎙ Print</button>
+</div>
+
+<!-- CONNECT BAR -->
+<div class="conn-bar">
+  <label class="lbl">Script URL</label>
+  <input class="url-inp" id="apps-url" type="text" placeholder="https://script.google.com/macros/s/AKfycb…/exec">
+  <select id="sheet-sel"><option>APR</option><option>MAY</option><option>JUN</option><option>JUL</option><option>AUG</option><option>SEP</option><option>OCT</option><option>NOV</option><option>DEC</option><option>JAN</option><option>FEB</option><option>MAR</option></select>
+  <button class="bp" onclick="connectAndSave()">Connect &amp; Load</button>
+  <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--ink3);cursor:pointer;"><input type="checkbox" id="save-chk" style="width:12px;height:12px;"> Remember</label>
+  <button id="forget-btn" onclick="clearSaved()" style="display:none;background:var(--red-l);color:var(--red);border-color:var(--red-m);">✕ Forget</button>
+  <button onclick="loadDemo()" style="color:var(--ink3);">Demo</button>
+  <!-- LIVE RELOAD TOGGLE -->
+  <div class="fsep" style="width:1px;height:18px;background:var(--line2);"></div>
+  <label class="lbl">Live reload</label>
+  <select id="live-interval" onchange="setLiveReload()">
+    <option value="0">Off</option>
+    <option value="60">Every 1 min</option>
+    <option value="300">Every 5 min</option>
+    <option value="900">Every 15 min</option>
+  </select>
+  <span id="live-badge" style="display:none;font-size:10px;font-weight:600;color:var(--green);background:var(--green-l);border-radius:20px;padding:2px 8px;">● LIVE</span>
+</div>
+
+<!-- INFO BAR -->
+<div class="ibar" id="ibar"></div>
+
+<!-- USERS BAR -->
+<div class="ubar" id="ubar">
+  <span style="font-size:11px;color:#1040a0;font-weight:500;">Viewing:</span>
+  <div id="uchips" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
+  <div style="flex:1;"></div>
+  <label style="font-size:11px;color:var(--ink3);">Name: <input type="text" id="my-name" placeholder="Your name" style="font-size:11px;padding:3px 7px;border:1px solid var(--line2);border-radius:4px;background:var(--paper);width:110px;margin-left:3px;" onblur="setMyName(this.value)"></label>
+</div>
+
+<!-- TABS -->
+<div class="tabnav">
+  <div class="tab active" onclick="showTab('home',this)">🏠 Overview</div>
+  <div class="tab" onclick="showTab('daywise',this)">📅 Day-wise</div>
+  <div class="tab" onclick="showTab('weekly',this)">📆 Weekly</div>
+  <div class="tab" onclick="showTab('mtd',this)">📊 MTD Report</div>
+  <div class="tab" onclick="showTab('kpi',this)">🎯 KPI Alerts</div>
+  <div class="tab" onclick="showTab('audit',this)">🔍 Audit</div>
+</div>
+
+<!-- FILTER STRIP -->
+<div class="fstrip">
+  <label class="lbl">Month</label><select id="g-month" onchange="changeMonth()"></select>
+  <div class="fsep"></div>
+  <label class="lbl">From</label><select id="g-from" onchange="applyFilters()"><option value="">All</option></select>
+  <label class="lbl">To</label><select id="g-to" onchange="applyFilters()"><option value="">All</option></select>
+  <label class="lbl">Week</label>
+  <select id="g-week" onchange="applyWeek()">
+    <option value="">Custom</option>
+    <option value="W1">W1 (1-7)</option>
+    <option value="W2">W2 (8-14)</option>
+    <option value="W3">W3 (15-21)</option>
+    <option value="W4">W4 (22+)</option>
+    <option value="MTD">Full MTD</option>
+  </select>
+  <div class="fsep"></div>
+  <label class="lbl">RM</label><select id="g-rm" onchange="applyFilters()"><option value="">All</option></select>
+  <label class="lbl">CM</label><select id="g-cm" onchange="applyFilters()"><option value="">All</option></select>
+  <label class="lbl">City</label><select id="g-city" onchange="applyFilters()"><option value="">All</option></select>
+  <div style="flex:1;"></div>
+  <span class="badge" id="fbadge">—</span>
+  <button class="brst" style="padding:3px 8px;" onclick="resetFilters()">✕ Reset</button>
+</div>
+
+<!-- CONTENT -->
+<div class="content">
+
+<!-- ══ HOME ══ -->
+<div class="panel active" id="panel-home">
+  <div class="ks" id="kpi-cards"></div>
+  <div class="sh"><span class="sh-t">RM — Target vs Achievement &amp; Month-end Projection</span><div class="sh-l"></div><div class="sh-a"><button class="bdl" onclick="dl('t-rm','RM')">⬇ CSV</button></div></div>
+  <div class="tw"><table id="t-rm"><thead><tr>
+    <th onclick="srt('t-rm',0)">RM</th><th class="r" onclick="srt('t-rm',1)">Target</th><th class="r" onclick="srt('t-rm',2)">MTD Sales</th><th class="r" onclick="srt('t-rm',3)">Ach%</th>
+    <th onclick="srt('t-rm',4)">EOM Proj</th><th class="r" onclick="srt('t-rm',5)">Proj%</th>
+    <th class="r" onclick="srt('t-rm',6)">Walk-ins</th><th class="r" onclick="srt('t-rm',7)">W-in Tgt</th><th onclick="srt('t-rm',8)">W-in Proj</th>
+    <th class="r" onclick="srt('t-rm',9)">Conv%</th><th class="r" onclick="srt('t-rm',10)">Conv Tgt</th>
+    <th class="r" onclick="srt('t-rm',11)">ABV</th><th class="r" onclick="srt('t-rm',12)">ABV Tgt</th>
+    <th class="r" onclick="srt('t-rm',13)">UPT</th><th class="r" onclick="srt('t-rm',14)">UPT Tgt</th>
+  </tr></thead><tbody id="b-rm"></tbody></table></div>
+
+  <div class="sh"><span class="sh-t">CM — Target vs Achievement &amp; Month-end Projection</span><div class="sh-l"></div><div class="sh-a"><button class="bdl" onclick="dl('t-cm','CM')">⬇ CSV</button></div></div>
+  <div class="tw"><table id="t-cm"><thead><tr>
+    <th onclick="srt('t-cm',0)">CM</th><th class="r" onclick="srt('t-cm',1)">Target</th><th class="r" onclick="srt('t-cm',2)">MTD Sales</th><th class="r" onclick="srt('t-cm',3)">Ach%</th>
+    <th onclick="srt('t-cm',4)">EOM Proj</th><th class="r" onclick="srt('t-cm',5)">Proj%</th>
+    <th class="r" onclick="srt('t-cm',6)">Walk-ins</th><th class="r" onclick="srt('t-cm',7)">W-in Tgt</th><th onclick="srt('t-cm',8)">W-in Proj</th>
+    <th class="r" onclick="srt('t-cm',9)">Conv%</th><th class="r" onclick="srt('t-cm',10)">Conv Tgt</th>
+    <th class="r" onclick="srt('t-cm',11)">ABV</th><th class="r" onclick="srt('t-cm',12)">ABV Tgt</th>
+    <th class="r" onclick="srt('t-cm',13)">UPT</th><th class="r" onclick="srt('t-cm',14)">UPT Tgt</th>
+  </tr></thead><tbody id="b-cm"></tbody></table></div>
+
+  <div class="sh"><span class="sh-t">Market — City-wise Projection</span><div class="sh-l"></div><div class="sh-a"><button class="bdl" onclick="dl('t-city','City')">⬇ CSV</button></div></div>
+  <div class="tw"><table id="t-city"><thead><tr>
+    <th onclick="srt('t-city',0)">City</th><th class="r" onclick="srt('t-city',1)">Target</th><th class="r" onclick="srt('t-city',2)">MTD</th><th class="r" onclick="srt('t-city',3)">Ach%</th><th onclick="srt('t-city',4)">EOM Proj</th><th class="r" onclick="srt('t-city',5)">Proj%</th><th class="r" onclick="srt('t-city',6)">Stores</th>
+  </tr></thead><tbody id="b-city"></tbody></table></div>
+
+  <div class="sh"><span class="sh-t">Store — All KPI Projections</span><div class="sh-l"></div><div class="sh-a"><button class="bdl" onclick="dl('t-store','Store_KPI')">⬇ CSV</button></div></div>
+  <div class="tw"><table id="t-store"><thead><tr>
+    <th onclick="srt('t-store',0)">Store</th><th onclick="srt('t-store',1)">RM</th><th onclick="srt('t-store',2)">CM</th>
+    <th class="r" onclick="srt('t-store',3)">Target</th><th class="r" onclick="srt('t-store',4)">MTD</th><th class="r" onclick="srt('t-store',5)">Ach%</th>
+    <th class="r" onclick="srt('t-store',6)">Proj</th><th class="r" onclick="srt('t-store',7)">Proj%</th>
+    <th class="r" onclick="srt('t-store',8)">W-ins</th><th class="r" onclick="srt('t-store',9)">W-in Tgt</th><th class="r" onclick="srt('t-store',10)">W-in Proj%</th>
+    <th class="r" onclick="srt('t-store',11)">Conv%</th><th class="r" onclick="srt('t-store',12)">Conv Tgt</th>
+    <th class="r" onclick="srt('t-store',13)">ABV</th><th class="r" onclick="srt('t-store',14)">ABV Tgt</th>
+    <th class="r" onclick="srt('t-store',15)">UPT</th><th class="r" onclick="srt('t-store',16)">UPT Tgt</th>
+  </tr></thead><tbody id="b-store"></tbody></table></div>
+</div>
+
+<!-- ══ DAY-WISE ══ -->
+<div class="panel" id="panel-daywise">
+  <div class="sh"><span class="sh-t" id="day-title">Day-wise Sales</span><div class="sh-l"></div><div class="sh-a"><button class="bdl" onclick="dl('t-day','Daywise')">⬇ CSV</button></div></div>
+  <div class="tw"><table id="t-day"><thead id="day-thead"></thead><tbody id="b-day"></tbody></table></div>
+</div>
+
+<!-- ══ WEEKLY ══ -->
+<div class="panel" id="panel-weekly">
+  <div class="ks" id="wk-cards"></div>
+  <div class="sh"><span class="sh-t">Week-over-Week Sales Comparison</span><div class="sh-l"></div><div class="sh-a"><button class="bdl" onclick="dl('t-wk','Weekly')">⬇ CSV</button></div></div>
+  <div class="tw"><table id="t-wk"><thead><tr>
+    <th onclick="srt('t-wk',0)">Store</th><th onclick="srt('t-wk',1)">RM</th>
+    <th class="r" onclick="srt('t-wk',2)">W1 (1-7)</th><th class="r" onclick="srt('t-wk',3)">W2 (8-14)</th>
+    <th class="r" onclick="srt('t-wk',4)">W3 (15-21)</th><th class="r" onclick="srt('t-wk',5)">W4 (22+)</th>
+    <th class="r" onclick="srt('t-wk',6)">W2 vs W1</th><th class="r" onclick="srt('t-wk',7)">W3 vs W2</th><th class="r" onclick="srt('t-wk',8)">W4 vs W3</th>
+    <th class="r" onclick="srt('t-wk',9)">MTD Total</th>
+  </tr></thead><tbody id="b-wk"></tbody></table></div>
+</div>
+
+<!-- ══ MTD REPORT ══ -->
+<div class="panel" id="panel-mtd">
+  <div class="sh"><span class="sh-t">MTD — All KPI Parameters</span><div class="sh-l"></div><div class="sh-a"><button class="bdl" onclick="dl('t-mtd','MTD')">⬇ CSV</button></div></div>
+  <div class="tw"><table id="t-mtd"><thead><tr>
+    <th onclick="srt('t-mtd',0)">Store</th><th onclick="srt('t-mtd',1)">RM</th><th onclick="srt('t-mtd',2)">CM</th>
+    <th class="r" onclick="srt('t-mtd',3)">Sales Tgt</th><th class="r" onclick="srt('t-mtd',4)">MTD Sales</th><th class="r" onclick="srt('t-mtd',5)">Ach%</th>
+    <th class="r" onclick="srt('t-mtd',6)">Bills</th><th class="r" onclick="srt('t-mtd',7)">Bills Tgt</th><th class="r" onclick="srt('t-mtd',8)">Bills%</th>
+    <th class="r" onclick="srt('t-mtd',9)">Walk-ins</th><th class="r" onclick="srt('t-mtd',10)">W-in Tgt</th><th class="r" onclick="srt('t-mtd',11)">W-in%</th>
+    <th class="r" onclick="srt('t-mtd',12)">Conv%</th><th class="r" onclick="srt('t-mtd',13)">Conv Tgt</th>
+    <th class="r" onclick="srt('t-mtd',14)">ABV</th><th class="r" onclick="srt('t-mtd',15)">ABV Tgt</th>
+    <th class="r" onclick="srt('t-mtd',16)">UPT</th><th class="r" onclick="srt('t-mtd',17)">UPT Tgt</th>
+    <th class="r" onclick="srt('t-mtd',18)">Sold Qty</th>
+  </tr></thead><tbody id="b-mtd"></tbody></table></div>
+</div>
+
+<!-- ══ KPI ALERTS ══ -->
+<div class="panel" id="panel-kpi">
+  <div class="sh"><span class="sh-t">Walk-ins ✓ good — Sales below target</span><div class="sh-l"></div><div class="sh-a"><button class="bdl" onclick="dl('t-kpi1','KPI_Walkins_OK_Sales_Low')">⬇ CSV</button></div></div>
+  <p style="font-size:11px;color:var(--ink3);margin-bottom:8px;">Walk-ins projection ≥ 100% BUT Sales projection &lt; 100% — foot traffic is fine but conversion/ABV needs attention.</p>
+  <div class="tw"><table id="t-kpi1"><thead><tr>
+    <th onclick="srt('t-kpi1',0)">Store</th><th onclick="srt('t-kpi1',1)">RM</th><th onclick="srt('t-kpi1',2)">CM</th>
+    <th class="r" onclick="srt('t-kpi1',3)">Sales Proj%</th><th class="r" onclick="srt('t-kpi1',4)">W-in Proj%</th>
+    <th class="r" onclick="srt('t-kpi1',5)">Conv%</th><th class="r" onclick="srt('t-kpi1',6)">Conv Tgt</th>
+    <th class="r" onclick="srt('t-kpi1',7)">ABV</th><th class="r" onclick="srt('t-kpi1',8)">ABV Tgt</th>
+  </tr></thead><tbody id="b-kpi1"></tbody></table></div>
+
+  <div class="sh"><span class="sh-t">ABV below target — other KPIs ok</span><div class="sh-l"></div><div class="sh-a"><button class="bdl" onclick="dl('t-kpi2','KPI_ABV_Low')">⬇ CSV</button></div></div>
+  <p style="font-size:11px;color:var(--ink3);margin-bottom:8px;">Sales &amp; Walk-ins are trending well but ABV is dragging below target.</p>
+  <div class="tw"><table id="t-kpi2"><thead><tr>
+    <th onclick="srt('t-kpi2',0)">Store</th><th onclick="srt('t-kpi2',1)">RM</th><th onclick="srt('t-kpi2',2)">CM</th>
+    <th class="r" onclick="srt('t-kpi2',3)">Sales Proj%</th><th class="r" onclick="srt('t-kpi2',4)">ABV</th><th class="r" onclick="srt('t-kpi2',5)">ABV Tgt</th><th class="r" onclick="srt('t-kpi2',6)">ABV%</th>
+    <th class="r" onclick="srt('t-kpi2',7)">UPT</th><th class="r" onclick="srt('t-kpi2',8)">UPT Tgt</th>
+  </tr></thead><tbody id="b-kpi2"></tbody></table></div>
+
+  <div class="sh"><span class="sh-t">UPT below target — other KPIs ok</span><div class="sh-l"></div><div class="sh-a"><button class="bdl" onclick="dl('t-kpi3','KPI_UPT_Low')">⬇ CSV</button></div></div>
+  <p style="font-size:11px;color:var(--ink3);margin-bottom:8px;">Sales trending well but UPT (units per transaction) is below target — customers are buying fewer items per bill.</p>
+  <div class="tw"><table id="t-kpi3"><thead><tr>
+    <th onclick="srt('t-kpi3',0)">Store</th><th onclick="srt('t-kpi3',1)">RM</th><th onclick="srt('t-kpi3',2)">CM</th>
+    <th class="r" onclick="srt('t-kpi3',3)">Sales Proj%</th><th class="r" onclick="srt('t-kpi3',4)">UPT</th><th class="r" onclick="srt('t-kpi3',5)">UPT Tgt</th><th class="r" onclick="srt('t-kpi3',6)">UPT%</th>
+    <th class="r" onclick="srt('t-kpi3',7)">ABV</th><th class="r" onclick="srt('t-kpi3',8)">ABV Tgt</th>
+  </tr></thead><tbody id="b-kpi3"></tbody></table></div>
+
+  <div class="sh"><span class="sh-t">Conversion below target</span><div class="sh-l"></div><div class="sh-a"><button class="bdl" onclick="dl('t-kpi4','KPI_Conv_Low')">⬇ CSV</button></div></div>
+  <p style="font-size:11px;color:var(--ink3);margin-bottom:8px;">Walk-ins are coming in but not converting to bills — floor engagement needs improvement.</p>
+  <div class="tw"><table id="t-kpi4"><thead><tr>
+    <th onclick="srt('t-kpi4',0)">Store</th><th onclick="srt('t-kpi4',1)">RM</th><th onclick="srt('t-kpi4',2)">CM</th>
+    <th class="r" onclick="srt('t-kpi4',3)">Walk-ins</th><th class="r" onclick="srt('t-kpi4',4)">Bills</th>
+    <th class="r" onclick="srt('t-kpi4',5)">Conv%</th><th class="r" onclick="srt('t-kpi4',6)">Conv Tgt</th><th class="r" onclick="srt('t-kpi4',7)">Conv%</th>
+    <th class="r" onclick="srt('t-kpi4',8)">Sales Proj%</th>
+  </tr></thead><tbody id="b-kpi4"></tbody></table></div>
+</div>
+
+<!-- ══ AUDIT ══ -->
+<div class="panel" id="panel-audit">
+  <div class="sh"><span class="sh-t">Data Audit — Missing / Incomplete entries</span><div class="sh-l"></div></div>
+  <div id="audit-alerts"></div>
+  <div class="sh"><span class="sh-t">Stores with zero sales today (data not yet entered)</span><div class="sh-l"></div><div class="sh-a"><button class="bdl" onclick="dl('t-aud1','Audit_Zero_Today')">⬇ CSV</button></div></div>
+  <div class="tw"><table id="t-aud1"><thead><tr>
+    <th onclick="srt('t-aud1',0)">Store</th><th onclick="srt('t-aud1',1)">RM</th><th onclick="srt('t-aud1',2)">CM</th>
+    <th class="r" onclick="srt('t-aud1',3)">Yesterday Sales</th><th class="r" onclick="srt('t-aud1',4)">Today Sales</th>
+    <th class="r" onclick="srt('t-aud1',5)">MTD Sales</th><th class="r" onclick="srt('t-aud1',6)">Days Entered</th><th onclick="srt('t-aud1',7)">Status</th>
+  </tr></thead><tbody id="b-aud1"></tbody></table></div>
+
+  <div class="sh"><span class="sh-t">Stores significantly below region average (outliers)</span><div class="sh-l"></div><div class="sh-a"><button class="bdl" onclick="dl('t-aud2','Audit_Low_Performers')">⬇ CSV</button></div></div>
+  <div class="tw"><table id="t-aud2"><thead><tr>
+    <th onclick="srt('t-aud2',0)">Store</th><th onclick="srt('t-aud2',1)">RM</th><th onclick="srt('t-aud2',2)">CM</th>
+    <th class="r" onclick="srt('t-aud2',3)">Ach%</th><th class="r" onclick="srt('t-aud2',4)">Region Avg Ach%</th><th class="r" onclick="srt('t-aud2',5)">Gap vs Avg</th>
+    <th class="r" onclick="srt('t-aud2',6)">Proj%</th><th onclick="srt('t-aud2',7)">Alert</th>
+  </tr></thead><tbody id="b-aud2"></tbody></table></div>
+
+  <div class="sh"><span class="sh-t">Missing KPI targets (no target set in STORE TARGETS)</span><div class="sh-l"></div><div class="sh-a"><button class="bdl" onclick="dl('t-aud3','Audit_Missing_Targets')">⬇ CSV</button></div></div>
+  <div class="tw"><table id="t-aud3"><thead><tr>
+    <th onclick="srt('t-aud3',0)">Store</th><th onclick="srt('t-aud3',1)">RM</th>
+    <th class="r" onclick="srt('t-aud3',2)">Sales Tgt</th><th onclick="srt('t-aud3',3)">Bills Tgt</th><th onclick="srt('t-aud3',4)">W-ins Tgt</th><th onclick="srt('t-aud3',5)">Conv Tgt</th><th onclick="srt('t-aud3',6)">ABV Tgt</th><th onclick="srt('t-aud3',7)">UPT Tgt</th>
+  </tr></thead><tbody id="b-aud3"></tbody></table></div>
+</div>
+
+</div><!-- /content -->
+
+<!-- STORE DRILL MODAL -->
+<div class="modal-bg" id="drill-bg" onclick="if(event.target===this)closeDrill()">
+  <div class="modal">
+    <div class="mhd">
+      <div><div style="font-size:14px;font-weight:600;" id="dt"></div><div style="font-size:11px;color:var(--ink3);margin-top:2px;" id="ds"></div></div>
+      <div class="mcl" onclick="closeDrill()">✕</div>
+    </div>
+    <div class="mbd" id="db"></div>
+  </div>
+</div>
+
+<script>
+/* ══ CONFIG ══ */
+const SAVED_URL = '';
+
+/* ══ STATE ══ */
+let raw=[], labels=[], totalDays=30, activeSheet='APR', activeURL='';
+let filtered=[], fromIdx=0, toIdx=0;
+let sortDir={}, liveTimer=null;
+const MY_ID='u_'+Math.random().toString(36).substr(2,9);
+let myName=localStorage.getItem('dash_uname')||'';
+const UCOLS=['#1c52a3','#1e7d45','#b35900','#534AB7','#0F6E56'];
+
+/* ══ FORMATTERS ══ */
+const L=n=>!n&&n!==0?'—':Math.abs(n)>=10000000?'₹'+(n/10000000).toFixed(2)+'Cr':Math.abs(n)>=100000?'₹'+(n/100000).toFixed(1)+'L':Math.abs(n)>=1000?'₹'+(n/1000).toFixed(0)+'K':'₹'+Math.round(n).toLocaleString('en-IN');
+const N=n=>!n&&n!==0?'—':Math.abs(n)>=1000?(n/1000).toFixed(1)+'K':Math.round(n)+'';
+const R2=n=>!n&&n!==0?'—':parseFloat(n).toFixed(2);
+const pc=p=>p>=100?'gv':p>=85?'av':'rv';
+const pcl=p=>p>=100?'var(--green)':p>=85?'var(--amber)':'var(--red)';
+const nd=(c,m)=>`<tr><td colspan="${c}" style="text-align:center;color:var(--ink3);padding:18px;">${m||'No data'}</td></tr>`;
+const ts=()=>new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+const now=()=>new Date();
+
+function bar(pct,mini){
+  if(pct===null||pct===undefined) return '<span class="dim">—</span>';
+  const w=Math.min(pct,100),col=pcl(pct);
+  if(mini) return `<span class="${pc(pct)}">${pct}%</span>`;
+  return `<div class="bar-c"><div class="bar-t"><div class="bar-f" style="width:${w}%;background:${col};"></div></div><span class="bar-p ${pc(pct)}">${pct}%</span></div>`;
+}
+
+/* ══ JSONP ══ */
+function jfetch(url,sheet,action){
+  return new Promise((res,rej)=>{
+    const cb='cb_'+Date.now()+'_'+Math.random().toString(36).substr(2,4);
+    const el=document.createElement('script');
+    const t=setTimeout(()=>{cleanup();rej(new Error('Timeout'));},18000);
+    window[cb]=d=>{clearTimeout(t);cleanup();d&&d.error?rej(new Error(d.error)):res(d);};
+    function cleanup(){delete window[cb];el.parentNode&&el.parentNode.removeChild(el);}
+    el.onerror=()=>{clearTimeout(t);cleanup();rej(new Error('Script load failed'));};
+    let src=url+'?sheet='+encodeURIComponent(sheet)+'&callback='+cb;
+    if(action) src+='&action='+action;
+    src+='&userId='+encodeURIComponent(MY_ID)+'&userName='+encodeURIComponent(myName||'User');
+    el.src=src; document.head.appendChild(el);
+  });
+}
+
+/* ══ CONNECT ══ */
+async function connectAndSave(){
+  const url=document.getElementById('apps-url').value.trim();
+  const sheet=document.getElementById('sheet-sel').value;
+  if(!url){ibar('Paste your Apps Script URL first','wrn');return;}
+  if(document.getElementById('save-chk').checked){
+    localStorage.setItem('dash_url',url);localStorage.setItem('dash_sheet',sheet);
+    document.getElementById('forget-btn').style.display='inline-block';
+  }
+  await load(url,sheet);
+}
+async function load(url,sheet){
+  setst('Connecting…','warn');ibar('Connecting…','inf');
+  try{const d=await jfetch(url,sheet);ingest(d,url,sheet);}
+  catch(e){setst('Failed','err');ibar('❌ '+e.message,'err');}
+}
+function ingest(d,url,sheet){
+  if(!d||!d.stores||!d.stores.length){ibar('⚠️ No store data. Check sheet tab name.','wrn');return;}
+  raw=d.stores;labels=d.dayLabels||[];totalDays=d.totalDaysInMonth||30;
+  activeURL=url||'';activeSheet=sheet||'APR';
+  ibar('','');
+  buildFilters(d.sheets);
+  buildDayFilters();
+  applyFilters();
+  if(d.activeUsers)renderUsers(d.activeUsers);
+  document.getElementById('ubar').style.display='flex';
+  setst('Live · '+raw.length+' stores · '+ts(),false);
+}
+async function doRefresh(){activeURL?await load(activeURL,activeSheet):loadDemo();}
+async function changeMonth(){
+  const s=document.getElementById('g-month').value;
+  document.getElementById('sheet-sel').value=s;activeSheet=s;
+  if(!activeURL){applyFilters();return;}
+  setst('Loading '+s+'…','warn');
+  try{const d=await jfetch(activeURL,s);ingest(d,activeURL,s);}
+  catch(e){setst('Error','err');}
+}
+function clearSaved(){
+  localStorage.removeItem('dash_url');localStorage.removeItem('dash_sheet');
+  document.getElementById('forget-btn').style.display='none';
+  document.getElementById('save-chk').checked=false;
+  document.getElementById('apps-url').value='';
+  ibar('URL forgotten.','wrn');
+}
+
+/* ══ LIVE RELOAD ══ */
+function setLiveReload(){
+  const sec=parseInt(document.getElementById('live-interval').value)||0;
+  if(liveTimer){clearInterval(liveTimer);liveTimer=null;}
+  const badge=document.getElementById('live-badge');
+  if(sec>0&&activeURL){
+    liveTimer=setInterval(async()=>{
+      if(!activeURL) return;
+      try{const d=await jfetch(activeURL,activeSheet);ingest(d,activeURL,activeSheet);}catch(e){}
+    },sec*1000);
+    badge.style.display='inline-block';
+    ibar('🔄 Live reload every '+Math.round(sec/60)+' min. Data updates as soon as team enters sales!','inf');
+  } else {
+    badge.style.display='none';
+    if(sec===0&&liveTimer===null) ibar('','');
+  }
+}
+
+/* ══ FILTERS ══ */
+function buildFilters(sheets){
+  const rms=[...new Set(raw.map(s=>s.rm))].filter(Boolean).sort();
+  const cms=[...new Set(raw.map(s=>s.cm))].filter(Boolean).sort();
+  const cities=[...new Set(raw.map(s=>s.city))].filter(Boolean).sort();
+  fillS('g-rm',rms);fillS('g-cm',cms);fillS('g-city',cities);
+  const ms=sheets&&sheets.length?sheets:['APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB','MAR'];
+  document.getElementById('g-month').innerHTML=ms.map(m=>`<option value="${m}"${m===activeSheet?' selected':''}>${m}</option>`).join('');
+  document.getElementById('sheet-sel').innerHTML=document.getElementById('g-month').innerHTML;
+}
+function fillS(id,arr){const el=document.getElementById(id),v=el.value;el.innerHTML='<option value="">All</option>'+arr.map(a=>`<option value="${a}"${a===v?' selected':''}>${a}</option>`).join('');}
+
+function buildDayFilters(){
+  if(!labels.length) return;
+  const gf=document.getElementById('g-from'),gt=document.getElementById('g-to');
+  const opts=labels.map((l,i)=>`<option value="${i}">${l}</option>`).join('');
+  gf.innerHTML='<option value="">All</option>'+opts;
+  gt.innerHTML='<option value="">All</option>'+opts;
+  gt.value=String(labels.length-1);
+  fromIdx=0;toIdx=labels.length-1;
+  updateDayLabel();
+}
+function applyWeek(){
+  const w=document.getElementById('g-week').value;
+  const R={W1:[0,6],W2:[7,13],W3:[14,20],W4:[21,99],MTD:[0,labels.length-1]};
+  if(w&&R[w]){
+    fromIdx=Math.min(R[w][0],labels.length-1);
+    toIdx=Math.min(R[w][1],labels.length-1);
+    document.getElementById('g-from').value=String(fromIdx);
+    document.getElementById('g-to').value=String(toIdx);
+  } else {fromIdx=0;toIdx=labels.length-1;}
+  applyFilters();
+}
+function applyFilters(){
+  const fi=document.getElementById('g-from').value;
+  const ti=document.getElementById('g-to').value;
+  if(fi!=='') fromIdx=parseInt(fi); else fromIdx=0;
+  if(ti!=='') toIdx=parseInt(ti); else toIdx=labels.length-1;
+  document.getElementById('g-week').value='';
+  updateDayLabel();
+  const rm=document.getElementById('g-rm').value;
+  const cm=document.getElementById('g-cm').value;
+  const cy=document.getElementById('g-city').value;
+  filtered=raw.filter(s=>(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy));
+  document.getElementById('fbadge').textContent=filtered.length+' stores · '+(toIdx-fromIdx+1)+' days · '+activeSheet;
+  renderAll();
+}
+function updateDayLabel(){
+  const fl=labels[fromIdx]||'Day 1',tl=labels[toIdx]||('Day '+labels.length);
+  const range=fromIdx===toIdx?fl:fl+' → '+tl;
+  document.getElementById('day-title').textContent='Day-wise Sales — '+range;
+}
+function resetFilters(){
+  ['g-rm','g-cm','g-city'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('g-from').value='';
+  document.getElementById('g-to').value=String(labels.length-1);
+  document.getElementById('g-week').value='';
+  fromIdx=0;toIdx=labels.length-1;
+  applyFilters();
+}
+
+/* ══ RANGE-AWARE METRICS ══ */
+// Get day-range slice of each KPI per store
+function storeInRange(s){
+  const ds=s.daySales||[];
+  const fi=Math.min(fromIdx,ds.length-1);
+  const ti=Math.min(toIdx,ds.length-1);
+  const rDays=Math.max(1,ti-fi+1);
+  const sales=ds.slice(fi,ti+1).reduce((a,b)=>a+b,0);
+  // Bills/walkIns/soldQty: scale from MTD proportionally
+  const frac=s.mtdSales>0?sales/s.mtdSales:0;
+  const bills=Math.round((s.mtdBills||0)*frac);
+  const wlk  =Math.round((s.mtdWalkIns||0)*frac);
+  const qty  =Math.round((s.mtdSoldQty||0)*frac);
+  const abv  =bills?Math.round(sales/bills):0;
+  const conv =wlk?Math.round(bills/wlk*1000)/10:0;
+  const upt  =bills?Math.round(qty/bills*100)/100:0;
+  const isFullMTD=(fromIdx===0&&toIdx>=labels.length-1);
+  return {sales,bills,wlk,qty,abv,conv,upt,rDays,
+    // Use full MTD for projections when range = full MTD
+    proj:isFullMTD?(s.projectedTotal||0):Math.round(sales/rDays*totalDays),
+    pct:isFullMTD?s.pct:(s.target?Math.round(sales/s.target*100*rDays/totalDays):0),
+    tp:isFullMTD?s.trendingPct:(s.target?Math.round((sales/rDays*totalDays)/s.target*100):0)
+  };
+}
+
+/* ══ RENDER ALL ══ */
+function renderAll(){
+  renderKPIs();
+  renderGroup('rm','b-rm');
+  renderGroup('cm','b-cm');
+  renderCity();
+  renderStores();
+  renderDaywise();
+  renderWeekly();
+  renderMTD();
+  renderKPIAlerts();
+  renderAudit();
+}
+
+/* ── KPI headline cards ── */
+function renderKPIs(){
+  const f=filtered;if(!f.length){document.getElementById('kpi-cards').innerHTML='';return;}
+  let tgt=0,sal=0,bil=0,wlk=0,qty=0,proj=0;
+  f.forEach(s=>{const r=storeInRange(s);tgt+=s.target;sal+=r.sales;bil+=r.bills;wlk+=r.wlk;qty+=r.qty;proj+=r.proj;});
+  const isFullMTD=(fromIdx===0&&toIdx>=labels.length-1);
+  if(!isFullMTD){proj=Math.round(sal/(toIdx-fromIdx+1)*totalDays);}
+  const ap=tgt?Math.round(sal/tgt*100):0;
+  const tp=tgt?Math.round(proj/tgt*100):0;
+  const abv=bil?Math.round(sal/bil):0;
+  const conv=wlk?Math.round(bil/wlk*1000)/10:0;
+  const upt=bil?Math.round(qty/bil*100)/100:0;
+  const on=f.filter(s=>s.trendingPct>=100).length;
+  const gap=proj-tgt;
+
+  document.getElementById('kpi-cards').innerHTML=[
+    {l:'Month Target',v:L(tgt),s:f.length+' stores',c:''},
+    {l:'Period Sales',v:L(sal),s:(ap>=100?'✓ ':'↓ ')+ap+'% ach',c:ap>=100?'grn':'red'},
+    {l:'EOM Projection',v:L(proj),s:(gap>=0?'+':'')+L(gap),c:tp>=100?'grn':'red'},
+    {l:'Proj%',v:tp+'%',s:tp>=100?'On track':'Behind',c:tp>=100?'grn':tp>=85?'amb':'red'},
+    {l:'On-track',v:on,s:'of '+f.length+' stores',c:''},
+    {l:'Bills',v:N(bil),s:'period total',c:''},
+    {l:'Walk-ins',v:N(wlk),s:'period total',c:''},
+    {l:'Conversion',v:conv+'%',s:'bills÷walkins',c:''},
+    {l:'ABV ₹',v:abv?'₹'+abv.toLocaleString('en-IN'):'—',s:'avg bill value',c:''},
+    {l:'UPT',v:R2(upt),s:'units per bill',c:''},
+  ].map(c=>`<div class="kc ${c.c}"><div class="kl">${c.l}</div><div class="kv">${c.v}</div><div class="ks2">${c.s}</div></div>`).join('');
+}
+
+/* ── Group table (RM or CM) ── */
+function renderGroup(key,bid){
+  const G={};
+  filtered.forEach(s=>{
+    const k=s[key]||'?';
+    if(!G[k])G[k]={t:0,s:0,p:0,mb:0,mq:0,mw:0,wt:0,wp:0,ct:0,at:0,ut:0,n:0};
+    const g=G[k],r=storeInRange(s),kt=s.kpiTargets||{},tr=s.kpiTrending||{};
+    g.t+=s.target;g.s+=r.sales;g.p+=r.proj;
+    g.mb+=r.bills;g.mq+=r.qty;g.mw+=r.wlk;
+    g.wt+=kt.walkIns||0;g.wp+=(tr.walkIns?tr.walkIns.projected:r.wlk);
+    g.ct+=kt.conversion||0;g.at+=kt.abv||0;g.ut+=kt.upt||0;g.n++;
+  });
+  const rows=Object.entries(G).sort((a,b)=>b[1].s-a[1].s);
+  const tot={t:0,s:0,p:0,mb:0,mq:0,mw:0,wt:0,wp:0};
+  rows.forEach(([,v])=>{tot.t+=v.t;tot.s+=v.s;tot.p+=v.p;tot.mb+=v.mb;tot.mq+=v.mq;tot.mw+=v.mw;tot.wt+=v.wt;tot.wp+=v.wp;});
+
+  const body=rows.map(([nm,g])=>{
+    const ap=g.t?Math.round(g.s/g.t*100):0;
+    const tp=g.t?Math.round(g.p/g.t*100):0;
+    const abv=g.mb?Math.round(g.s/g.mb):0;
+    const conv=g.mw?Math.round(g.mb/g.mw*1000)/10:0;
+    const upt=g.mb?Math.round(g.mq/g.mb*100)/100:0;
+    const wp=g.wt?Math.round(g.wp/g.wt*100):null;
+    const act=g.n?Math.round(g.ct/g.n*10)/10:0;
+    const aat=g.n?Math.round(g.at/g.n):0;
+    const aut=g.n?Math.round(g.ut/g.n*100)/100:0;
+    return `<tr class="${tp<100?'rr':''}">
+      <td style="font-weight:600;">${nm}</td>
+      <td class="r">${L(g.t)}</td><td class="r" style="font-weight:600;">${L(g.s)}</td>
+      <td class="r ${pc(ap)}">${ap}%</td>
+      <td>${bar(tp)}</td><td class="r ${pc(tp)}">${tp}%</td>
+      <td class="r">${N(g.mw)}</td><td class="r dim">${g.wt?N(g.wt):'—'}</td>
+      <td>${wp!==null?bar(wp):'<span class="dim">—</span>'}</td>
+      <td class="r ${act&&conv<act?'rv':conv>=act&&act?'gv':''}">${conv}%</td>
+      <td class="r dim">${act?act+'%':'—'}</td>
+      <td class="r ${aat&&abv<aat?'rv':abv>=aat&&aat?'gv':''}">${abv?'₹'+abv.toLocaleString('en-IN'):'—'}</td>
+      <td class="r dim">${aat?'₹'+aat.toLocaleString('en-IN'):'—'}</td>
+      <td class="r ${aut&&upt<aut?'rv':upt>=aut&&aut?'gv':''}">${upt}</td>
+      <td class="r dim">${aut||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const ta=tot.t?Math.round(tot.s/tot.t*100):0,tp2=tot.t?Math.round(tot.p/tot.t*100):0;
+  const twp=tot.wt?Math.round(tot.wp/tot.wt*100):null;
+  const tabv=tot.mb?Math.round(tot.s/tot.mb):0,tc=tot.mw?Math.round(tot.mb/tot.mw*1000)/10:0;
+  const tu=tot.mb?Math.round(tot.mq/tot.mb*100)/100:0;
+  document.getElementById(bid).innerHTML=body+`<tr class="ft">
+    <td>Total (${rows.length})</td><td class="r">${L(tot.t)}</td><td class="r">${L(tot.s)}</td>
+    <td class="r ${pc(ta)}">${ta}%</td><td>${bar(tp2)}</td><td class="r ${pc(tp2)}">${tp2}%</td>
+    <td class="r">${N(tot.mw)}</td><td class="r">${tot.wt?N(tot.wt):'—'}</td>
+    <td>${twp!==null?bar(twp):'—'}</td><td class="r">${tc}%</td><td class="r">—</td>
+    <td class="r">${tabv?'₹'+tabv.toLocaleString('en-IN'):'—'}</td><td class="r">—</td>
+    <td class="r">${tu}</td><td class="r">—</td>
+  </tr>`||nd(15);
+}
+
+/* ── City ── */
+function renderCity(){
+  const G={};
+  filtered.forEach(s=>{const k=s.city||'?';if(!G[k])G[k]={t:0,s:0,p:0,n:0};const r=storeInRange(s);G[k].t+=s.target;G[k].s+=r.sales;G[k].p+=r.proj;G[k].n++;});
+  const rows=Object.entries(G).sort((a,b)=>b[1].s-a[1].s);
+  const tot={t:0,s:0,p:0,n:0};rows.forEach(([,v])=>{tot.t+=v.t;tot.s+=v.s;tot.p+=v.p;tot.n+=v.n;});
+  document.getElementById('b-city').innerHTML=rows.map(([nm,g])=>{
+    const ap=g.t?Math.round(g.s/g.t*100):0,tp=g.t?Math.round(g.p/g.t*100):0;
+    return `<tr class="${tp<100?'rr':''}"><td style="font-weight:600;">${nm}</td><td class="r">${L(g.t)}</td><td class="r">${L(g.s)}</td><td class="r ${pc(ap)}">${ap}%</td><td>${bar(tp)}</td><td class="r ${pc(tp)}">${tp}%</td><td class="r dim">${g.n}</td></tr>`;
+  }).join('')+`<tr class="ft"><td>Total</td><td class="r">${L(tot.t)}</td><td class="r">${L(tot.s)}</td><td class="r ${pc(tot.t?Math.round(tot.s/tot.t*100):0)}">${tot.t?Math.round(tot.s/tot.t*100):0}%</td><td>${bar(tot.t?Math.round(tot.p/tot.t*100):0)}</td><td class="r ${pc(tot.t?Math.round(tot.p/tot.t*100):0)}">${tot.t?Math.round(tot.p/tot.t*100):0}%</td><td class="r">${tot.n}</td></tr>`||nd(7);
+}
+
+/* ── Store table ── */
+function renderStores(){
+  const sorted=[...filtered].sort((a,b)=>(b.trendingPct||0)-(a.trendingPct||0));
+  let totT=0,totS=0,totP=0;sorted.forEach(s=>{const r=storeInRange(s);totT+=s.target;totS+=r.sales;totP+=r.proj;});
+  document.getElementById('b-store').innerHTML=sorted.map(s=>{
+    const r=storeInRange(s),kt=s.kpiTargets||{},tr=s.kpiTrending||{};
+    const ap=r.pct,tp=r.tp;
+    const wlkProj=tr.walkIns?tr.walkIns.projected:r.wlk;
+    const wlkPp=kt.walkIns?Math.round(wlkProj/kt.walkIns*100):null;
+    const cPp=kt.conversion&&r.conv?Math.round(r.conv/kt.conversion*100):null;
+    const aPp=kt.abv&&r.abv?Math.round(r.abv/kt.abv*100):null;
+    const uPp=kt.upt&&r.upt?Math.round(r.upt/kt.upt*100):null;
+    return `<tr class="${tp<100?'rr':''}" style="cursor:pointer;" onclick="openDrill('${s.code}')">
+      <td style="font-weight:600;color:var(--blue);">${s.code}</td>
+      <td>${s.rm}</td><td>${s.cm}</td>
+      <td class="r">${L(s.target)}</td><td class="r" style="font-weight:600;">${L(r.sales)}</td>
+      <td class="r ${pc(ap)}">${ap}%</td>
+      <td class="r">${L(r.proj)}</td><td class="r ${pc(tp)}">${tp}%</td>
+      <td class="r">${N(r.wlk)}</td><td class="r dim">${kt.walkIns?N(kt.walkIns):'—'}</td>
+      <td class="r ${wlkPp!==null?pc(wlkPp):''}">${wlkPp!==null?wlkPp+'%':'—'}</td>
+      <td class="r ${cPp!==null?pc(cPp):''}">${r.conv}%</td><td class="r dim">${kt.conversion?kt.conversion+'%':'—'}</td>
+      <td class="r ${aPp!==null?pc(aPp):''}">${r.abv?'₹'+r.abv.toLocaleString('en-IN'):'—'}</td><td class="r dim">${kt.abv?'₹'+kt.abv.toLocaleString('en-IN'):'—'}</td>
+      <td class="r ${uPp!==null?pc(uPp):''}">${R2(r.upt)}</td><td class="r dim">${kt.upt||'—'}</td>
+    </tr>`;
+  }).join('')+`<tr class="ft"><td colspan="3">Total (${sorted.length})</td><td class="r">${L(totT)}</td><td class="r">${L(totS)}</td><td class="r ${pc(totT?Math.round(totS/totT*100):0)}">${totT?Math.round(totS/totT*100):0}%</td><td class="r">${L(totP)}</td><td class="r ${pc(totT?Math.round(totP/totT*100):0)}">${totT?Math.round(totP/totT*100):0}%</td><td colspan="9"></td></tr>`||nd(17);
+}
+
+/* ── Day-wise ── */
+function renderDaywise(){
+  if(!labels.length){document.getElementById('day-thead').innerHTML='';document.getElementById('b-day').innerHTML=nd(5,'No day data');return;}
+  const visLabels=labels.slice(fromIdx,toIdx+1);
+  document.getElementById('day-thead').innerHTML=`<tr>
+    <th class="dfx" onclick="srt('t-day',0)">Store</th>
+    <th class="dfx2" onclick="srt('t-day',1)" style="min-width:60px;">RM</th>
+    <th class="r" onclick="srt('t-day',2)">Target</th>
+    ${visLabels.map((l,i)=>`<th class="r" onclick="srt('t-day',${i+3})" style="min-width:70px;">${l}</th>`).join('')}
+    <th class="r" style="background:#1a3a5c;color:#90c8f0;min-width:80px;">Period Total</th>
+  </tr>`;
+  const rows=filtered.map(s=>{
+    const ds=s.daySales||[];
+    const dTgt=Math.round(s.target/totalDays);
+    const cells=visLabels.map((_,i)=>{
+      const v=ds[fromIdx+i]||0;
+      if(!v) return `<td class="r dim" style="font-size:11px;">—</td>`;
+      const p=dTgt?Math.round(v/dTgt*100):100;
+      return `<td class="r" style="font-size:11px;font-family:'DM Mono',monospace;color:${p<100?'var(--red)':'var(--green)'};">${L(v)}</td>`;
+    }).join('');
+    const tot=ds.slice(fromIdx,toIdx+1).reduce((a,b)=>a+b,0);
+    return `<tr>
+      <td class="dfx" style="font-weight:600;color:var(--blue);cursor:pointer;" onclick="openDrill('${s.code}')">${s.code}</td>
+      <td class="dfx2" style="font-size:11px;">${s.rm}</td>
+      <td class="r" style="font-family:'DM Mono',monospace;font-size:11px;">${L(s.target)}</td>
+      ${cells}
+      <td class="r" style="font-weight:700;background:#ebf2fc;font-family:'DM Mono',monospace;">${L(tot)}</td>
+    </tr>`;
+  }).join('');
+  const totByDay=visLabels.map((_,i)=>filtered.reduce((a,s)=>a+((s.daySales&&s.daySales[fromIdx+i])||0),0));
+  const grandTot=totByDay.reduce((a,b)=>a+b,0);
+  const tCells=totByDay.map(v=>`<td class="r" style="font-weight:700;font-family:'DM Mono',monospace;">${v?L(v):'—'}</td>`).join('');
+  document.getElementById('b-day').innerHTML=rows+`<tr class="ft"><td class="dfx">Region Total</td><td class="dfx2"></td><td class="r">${L(filtered.reduce((a,s)=>a+s.target,0))}</td>${tCells}<td class="r" style="background:#d4e8f7;">${L(grandTot)}</td></tr>`;
+}
+
+/* ── Weekly comparison ── */
+function renderWeekly(){
+  const weeks=[[0,6],[7,13],[14,20],[21,99]];
+  const wkLabels=['W1 (1-7)','W2 (8-14)','W3 (15-21)','W4 (22+)'];
+
+  function storeWeek(s,fi,ti){
+    const ds=s.daySales||[];
+    const slice=ds.slice(fi,Math.min(ti+1,ds.length));
+    return slice.reduce((a,b)=>a+b,0);
+  }
+
+  // Summary cards
+  const wkTots=weeks.map(([fi,ti])=>filtered.reduce((a,s)=>a+storeWeek(s,fi,ti),0));
+  const wkCards=wkTots.map((tot,i)=>{
+    const prev=i>0?wkTots[i-1]:null;
+    const chg=prev&&prev>0?Math.round((tot-prev)/prev*100):null;
+    return `<div class="week-card"><div class="wh"><span>${wkLabels[i]}</span>${chg!==null?`<span class="${chg>=0?'gv':'rv'}">${chg>=0?'+':''}${chg}%</span>`:''}</div><div class="wv">${L(tot)}</div><div class="ws">${prev?'vs prev '+L(prev):'First week'}</div></div>`;
+  }).join('');
+  document.getElementById('wk-cards').innerHTML=wkCards;
+
+  // Table
+  const rows=filtered.map(s=>{
+    const ws=weeks.map(([fi,ti])=>storeWeek(s,fi,ti));
+    function chg(a,b){if(!a) return '<span class="dim">—</span>';const p=Math.round((b-a)/a*100);return `<span class="${p>=0?'gv':'rv'}">${p>=0?'+':''}${p}%</span>`;}
+    const tot=ws.reduce((a,b)=>a+b,0);
+    return `<tr>
+      <td style="font-weight:600;color:var(--blue);cursor:pointer;" onclick="openDrill('${s.code}')">${s.code}</td>
+      <td>${s.rm}</td>
+      ${ws.map(v=>`<td class="r" style="font-family:'DM Mono',monospace;font-size:11px;">${v?L(v):'—'}</td>`).join('')}
+      <td class="r">${chg(ws[0],ws[1])}</td>
+      <td class="r">${chg(ws[1],ws[2])}</td>
+      <td class="r">${chg(ws[2],ws[3])}</td>
+      <td class="r" style="font-weight:700;">${L(tot)}</td>
+    </tr>`;
+  }).join('');
+  const totWks=weeks.map(([fi,ti])=>filtered.reduce((a,s)=>a+storeWeek(s,fi,ti),0));
+  document.getElementById('b-wk').innerHTML=rows+`<tr class="ft"><td colspan="2">Total</td>${totWks.map(v=>`<td class="r">${L(v)}</td>`).join('')}<td colspan="3"></td><td class="r">${L(totWks.reduce((a,b)=>a+b,0))}</td></tr>`||nd(10);
+}
+
+/* ── MTD report ── */
+function renderMTD(){
+  const sorted=[...filtered].sort((a,b)=>(b.pct||0)-(a.pct||0));
+  let tot={t:0,s:0,b:0,w:0,q:0};
+  sorted.forEach(s=>{tot.t+=s.target;tot.s+=s.mtdSales;tot.b+=s.mtdBills;tot.w+=s.mtdWalkIns;tot.q+=s.mtdSoldQty;});
+  document.getElementById('b-mtd').innerHTML=sorted.map(s=>{
+    const kt=s.kpiTargets||{};
+    const bP=kt.bills?Math.round(s.mtdBills/kt.bills*100):null;
+    const wP=kt.walkIns?Math.round(s.mtdWalkIns/kt.walkIns*100):null;
+    const cP=kt.conversion&&s.convActual?Math.round(s.convActual/kt.conversion*100):null;
+    const aP=kt.abv&&s.abv?Math.round(s.abv/kt.abv*100):null;
+    const uP=kt.upt&&s.upt?Math.round(s.upt/kt.upt*100):null;
+    return `<tr>
+      <td style="font-weight:600;color:var(--blue);cursor:pointer;" onclick="openDrill('${s.code}')">${s.code}</td>
+      <td>${s.rm}</td><td>${s.cm}</td>
+      <td class="r">${L(s.target)}</td><td class="r" style="font-weight:600;">${L(s.mtdSales)}</td>
+      <td class="r ${pc(s.pct)}">${s.pct}%</td>
+      <td class="r">${N(s.mtdBills)}</td><td class="r dim">${kt.bills?N(kt.bills):'—'}</td>
+      <td class="r ${bP!==null?pc(bP):''}">${bP!==null?bP+'%':'—'}</td>
+      <td class="r">${N(s.mtdWalkIns)}</td><td class="r dim">${kt.walkIns?N(kt.walkIns):'—'}</td>
+      <td class="r ${wP!==null?pc(wP):''}">${wP!==null?wP+'%':'—'}</td>
+      <td class="r ${cP!==null?pc(cP):''}">${s.convActual}%</td><td class="r dim">${kt.conversion?kt.conversion+'%':'—'}</td>
+      <td class="r ${aP!==null?pc(aP):''}">${s.abv?'₹'+s.abv.toLocaleString('en-IN'):'—'}</td><td class="r dim">${kt.abv?'₹'+kt.abv.toLocaleString('en-IN'):'—'}</td>
+      <td class="r ${uP!==null?pc(uP):''}">${R2(s.upt)}</td><td class="r dim">${kt.upt||'—'}</td>
+      <td class="r">${N(s.mtdSoldQty)}</td>
+    </tr>`;
+  }).join('')+`<tr class="ft"><td colspan="3">Total (${sorted.length})</td>
+    <td class="r">${L(tot.t)}</td><td class="r">${L(tot.s)}</td>
+    <td class="r ${pc(tot.t?Math.round(tot.s/tot.t*100):0)}">${tot.t?Math.round(tot.s/tot.t*100):0}%</td>
+    <td class="r">${N(tot.b)}</td><td class="r">—</td><td class="r">—</td>
+    <td class="r">${N(tot.w)}</td><td class="r">—</td><td class="r">—</td>
+    <td class="r">${tot.w?Math.round(tot.b/tot.w*1000)/10:0}%</td><td class="r">—</td>
+    <td class="r">${tot.b?'₹'+Math.round(tot.s/tot.b).toLocaleString('en-IN'):'—'}</td><td class="r">—</td>
+    <td class="r">${tot.b?R2(tot.q/tot.b):'—'}</td><td class="r">—</td>
+    <td class="r">${N(tot.q)}</td>
+  </tr>`||nd(19);
+}
+
+/* ── KPI Alert tables ── */
+function renderKPIAlerts(){
+  const stores=filtered;
+
+  // Table 1: Walk-ins ≥100% BUT Sales <100%
+  const t1=stores.filter(s=>{
+    const kt=s.kpiTargets||{},tr=s.kpiTrending||{};
+    const salTP=s.trendingPct||0;
+    const wlkP=kt.walkIns&&tr.walkIns?tr.walkIns.pct:null;
+    return salTP<100&&(wlkP===null||wlkP>=100);
+  });
+  document.getElementById('b-kpi1').innerHTML=t1.map(s=>{
+    const kt=s.kpiTargets||{},tr=s.kpiTrending||{};
+    const wp=kt.walkIns&&tr.walkIns?tr.walkIns.pct:null;
+    return `<tr class="rr" onclick="openDrill('${s.code}')" style="cursor:pointer;">
+      <td style="font-weight:600;color:var(--blue);">${s.code}</td><td>${s.rm}</td><td>${s.cm}</td>
+      <td class="r rv">${s.trendingPct}%</td>
+      <td class="r ${wp!==null?pc(wp):''}">${wp!==null?wp+'%':'—'}</td>
+      <td class="r">${s.convActual}%</td><td class="r dim">${kt.conversion?kt.conversion+'%':'—'}</td>
+      <td class="r">${s.abv?'₹'+s.abv.toLocaleString('en-IN'):'—'}</td><td class="r dim">${kt.abv?'₹'+kt.abv.toLocaleString('en-IN'):'—'}</td>
+    </tr>`;
+  }).join('')||nd(9,'✅ No stores in this situation');
+
+  // Table 2: Sales≥100% but ABV low
+  const t2=stores.filter(s=>{
+    const kt=s.kpiTargets||{};
+    const salTP=s.trendingPct||0;
+    const aP=kt.abv&&s.abv?Math.round(s.abv/kt.abv*100):null;
+    return salTP>=85&&aP!==null&&aP<100;
+  });
+  document.getElementById('b-kpi2').innerHTML=t2.map(s=>{
+    const kt=s.kpiTargets||{};
+    const aP=kt.abv?Math.round(s.abv/kt.abv*100):null;
+    const uP=kt.upt&&s.upt?Math.round(s.upt/kt.upt*100):null;
+    return `<tr class="rr" onclick="openDrill('${s.code}')" style="cursor:pointer;">
+      <td style="font-weight:600;color:var(--blue);">${s.code}</td><td>${s.rm}</td><td>${s.cm}</td>
+      <td class="r ${pc(s.trendingPct)}">${s.trendingPct}%</td>
+      <td class="r rv">${s.abv?'₹'+s.abv.toLocaleString('en-IN'):'—'}</td>
+      <td class="r dim">${kt.abv?'₹'+kt.abv.toLocaleString('en-IN'):'—'}</td>
+      <td class="r rv">${aP!==null?aP+'%':'—'}</td>
+      <td class="r">${R2(s.upt)}</td><td class="r dim">${kt.upt||'—'}</td>
+    </tr>`;
+  }).join('')||nd(9,'✅ No stores with ABV issues');
+
+  // Table 3: Sales≥85% but UPT low
+  const t3=stores.filter(s=>{
+    const kt=s.kpiTargets||{};
+    const salTP=s.trendingPct||0;
+    const uP=kt.upt&&s.upt?Math.round(s.upt/kt.upt*100):null;
+    return salTP>=85&&uP!==null&&uP<100;
+  });
+  document.getElementById('b-kpi3').innerHTML=t3.map(s=>{
+    const kt=s.kpiTargets||{};
+    const uP=kt.upt?Math.round(s.upt/kt.upt*100):null;
+    const aP=kt.abv&&s.abv?Math.round(s.abv/kt.abv*100):null;
+    return `<tr class="rr" onclick="openDrill('${s.code}')" style="cursor:pointer;">
+      <td style="font-weight:600;color:var(--blue);">${s.code}</td><td>${s.rm}</td><td>${s.cm}</td>
+      <td class="r ${pc(s.trendingPct)}">${s.trendingPct}%</td>
+      <td class="r rv">${R2(s.upt)}</td><td class="r dim">${kt.upt||'—'}</td>
+      <td class="r rv">${uP!==null?uP+'%':'—'}</td>
+      <td class="r ${aP!==null?pc(aP):''}">${s.abv?'₹'+s.abv.toLocaleString('en-IN'):'—'}</td>
+      <td class="r dim">${kt.abv?'₹'+kt.abv.toLocaleString('en-IN'):'—'}</td>
+    </tr>`;
+  }).join('')||nd(9,'✅ No stores with UPT issues');
+
+  // Table 4: Conversion low
+  const t4=stores.filter(s=>{
+    const kt=s.kpiTargets||{};
+    const cP=kt.conversion&&s.convActual?Math.round(s.convActual/kt.conversion*100):null;
+    return cP!==null&&cP<100;
+  });
+  document.getElementById('b-kpi4').innerHTML=t4.sort((a,b)=>{
+    const ka=a.kpiTargets||{},kb=b.kpiTargets||{};
+    const pa=ka.conversion?Math.round(a.convActual/ka.conversion*100):100;
+    const pb=kb.conversion?Math.round(b.convActual/kb.conversion*100):100;
+    return pa-pb;
+  }).map(s=>{
+    const kt=s.kpiTargets||{};
+    const cP=kt.conversion?Math.round(s.convActual/kt.conversion*100):null;
+    return `<tr class="rr" onclick="openDrill('${s.code}')" style="cursor:pointer;">
+      <td style="font-weight:600;color:var(--blue);">${s.code}</td><td>${s.rm}</td><td>${s.cm}</td>
+      <td class="r">${N(s.mtdWalkIns)}</td><td class="r">${N(s.mtdBills)}</td>
+      <td class="r rv">${s.convActual}%</td><td class="r dim">${kt.conversion?kt.conversion+'%':'—'}</td>
+      <td class="r rv">${cP!==null?cP+'%':'—'}</td>
+      <td class="r ${pc(s.trendingPct)}">${s.trendingPct}%</td>
+    </tr>`;
+  }).join('')||nd(9,'✅ All stores meeting conversion target');
+}
+
+/* ── Audit tab ── */
+function renderAudit(){
+  const stores=filtered;
+  const avgAch=stores.length?Math.round(stores.reduce((a,s)=>a+(s.pct||0),0)/stores.length):0;
+
+  // Alert boxes
+  const zeroToday=stores.filter(s=>!s.todaySales||s.todaySales===0);
+  const missingTgts=stores.filter(s=>{const kt=s.kpiTargets||{};return !kt.bills||!kt.walkIns||!kt.conversion||!kt.abv||!kt.upt;});
+  const lowPerf=stores.filter(s=>(s.pct||0)<avgAch-20);
+
+  document.getElementById('audit-alerts').innerHTML=`
+    <div class="alert-card ${zeroToday.length>0?'amber':'green'}">
+      <div class="ah">${zeroToday.length>0?'⚠️':'✅'} Today's data not yet entered <span class="alert-count">${zeroToday.length} stores</span></div>
+      <div style="font-size:11px;">${zeroToday.length>0?zeroToday.map(s=>s.code).join(', '):'All stores have entered today\'s data'}</div>
+    </div>
+    <div class="alert-card ${missingTgts.length>0?'amber':'green'}">
+      <div class="ah">${missingTgts.length>0?'⚠️':'✅'} Missing KPI targets <span class="alert-count">${missingTgts.length} stores</span></div>
+      <div style="font-size:11px;">${missingTgts.length>0?missingTgts.map(s=>s.code).join(', '):'All stores have complete KPI targets'}</div>
+    </div>
+    <div class="alert-card ${lowPerf.length>0?'red':'green'}">
+      <div class="ah">${lowPerf.length>0?'🔴':'✅'} Significantly below region average (>20% gap) <span class="alert-count">${lowPerf.length} stores</span></div>
+      <div style="font-size:11px;">Region avg: ${avgAch}% | ${lowPerf.length>0?lowPerf.map(s=>s.code+' ('+s.pct+'%)').join(', '):'No outliers'}</div>
+    </div>`;
+
+  // Table 1: Zero today
+  document.getElementById('b-aud1').innerHTML=zeroToday.sort((a,b)=>(a.pct||0)-(b.pct||0)).map(s=>{
+    const ds=s.daySales||[];
+    const yest=ds.length>=2?ds[ds.length-2]:0;
+    return `<tr class="rr">
+      <td style="font-weight:600;">${s.code}</td><td>${s.rm}</td><td>${s.cm}</td>
+      <td class="r">${yest?L(yest):'—'}</td>
+      <td class="r rv">Not entered</td>
+      <td class="r">${L(s.mtdSales)}</td>
+      <td class="r">${ds.filter(v=>v>0).length} / ${totalDays}</td>
+      <td><span style="background:var(--amber-l);color:var(--amber);border-radius:20px;padding:1px 8px;font-size:10px;font-weight:600;">Pending</span></td>
+    </tr>`;
+  }).join('')||nd(8,'✅ All stores have entered today\'s data');
+
+  // Table 2: Low performers
+  document.getElementById('b-aud2').innerHTML=stores.sort((a,b)=>(a.pct||0)-(b.pct||0)).map(s=>{
+    const gap=(s.pct||0)-avgAch;
+    const isLow=gap<-20;
+    return `<tr class="${isLow?'rr':''}" onclick="openDrill('${s.code}')" style="cursor:pointer;">
+      <td style="font-weight:600;color:var(--blue);">${s.code}</td><td>${s.rm}</td><td>${s.cm}</td>
+      <td class="r ${pc(s.pct)}">${s.pct}%</td>
+      <td class="r dim">${avgAch}%</td>
+      <td class="r ${gap<-20?'rv':gap>20?'gv':''}">${gap>=0?'+':''}${gap}%</td>
+      <td class="r ${pc(s.trendingPct)}">${s.trendingPct}%</td>
+      <td>${isLow?'<span style="background:var(--red-l);color:var(--red);border-radius:20px;padding:1px 8px;font-size:10px;font-weight:600;">⚠️ Low</span>':'<span style="background:var(--green-l);color:var(--green);border-radius:20px;padding:1px 8px;font-size:10px;font-weight:600;">OK</span>'}</td>
+    </tr>`;
+  }).join('')||nd(8);
+
+  // Table 3: Missing targets
+  document.getElementById('b-aud3').innerHTML=stores.map(s=>{
+    const kt=s.kpiTargets||{};
+    function tf(v,fmt){return v?`<span class="gv">${fmt?fmt(v):v}</span>`:`<span class="rv">Missing</span>`;}
+    const hasMissing=!kt.bills||!kt.walkIns||!kt.conversion||!kt.abv||!kt.upt;
+    return `<tr class="${hasMissing?'rr':''}">
+      <td style="font-weight:600;">${s.code}</td><td>${s.rm}</td>
+      <td class="r">${L(s.target)}</td>
+      <td class="r">${tf(kt.bills,N)}</td>
+      <td class="r">${tf(kt.walkIns,N)}</td>
+      <td class="r">${tf(kt.conversion,v=>v+'%')}</td>
+      <td class="r">${tf(kt.abv,v=>'₹'+Math.round(v).toLocaleString('en-IN'))}</td>
+      <td class="r">${tf(kt.upt,v=>v)}</td>
+    </tr>`;
+  }).join('')||nd(8);
+}
+
+/* ══ SORT ══ */
+function srt(tid,ci){
+  const tbl=document.getElementById(tid);const tbody=tbl.querySelector('tbody');
+  const rows=[...tbody.querySelectorAll('tr:not(.ft)')];const foot=tbody.querySelector('.ft');
+  const key=tid+':'+ci;const asc=sortDir[key]!=='asc';sortDir[key]=asc?'asc':'desc';
+  tbl.querySelectorAll('th').forEach((th,i)=>{th.classList.remove('asc','desc');if(i===ci)th.classList.add(asc?'asc':'desc');});
+  rows.sort((a,b)=>{
+    const va=(a.cells[ci]?.textContent||'').replace(/[₹,%KLCr\s▲▼+]/g,'').trim();
+    const vb=(b.cells[ci]?.textContent||'').replace(/[₹,%KLCr\s▲▼+]/g,'').trim();
+    const na=parseFloat(va),nb=parseFloat(vb);
+    if(!isNaN(na)&&!isNaN(nb)) return asc?na-nb:nb-na;
+    return asc?va.localeCompare(vb):vb.localeCompare(va);
+  });
+  rows.forEach(r=>tbody.appendChild(r));
+  if(foot) tbody.appendChild(foot);
+}
+
+/* ══ DOWNLOAD ══ */
+function dl(tid,fname){
+  const tbl=document.getElementById(tid);if(!tbl) return;
+  const csv=[...tbl.querySelectorAll('tr')].map(r=>[...r.querySelectorAll('th,td')].map(c=>'"'+c.textContent.replace(/\n/g,' ').replace(/"/g,'""').trim()+'"').join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
+  a.download=fname+'_'+activeSheet+'_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+}
+
+/* ══ DRILL-DOWN MODAL ══ */
+function openDrill(code){
+  const s=raw.find(x=>x.code===code);if(!s) return;
+  const kt=s.kpiTargets||{},tr=s.kpiTrending||{};
+  const de=s.daysCount||labels.length;
+  const dl2=Math.max(0,totalDays-de);
+  const dTgt=Math.round(s.target/totalDays);
+  document.getElementById('dt').textContent=s.name;
+  document.getElementById('ds').textContent=s.rm+' · '+s.cm+' · '+de+' days elapsed · '+dl2+' days remaining';
+
+  const kpis=[
+    {l:'Sales ₹',tgt:s.target,act:s.mtdSales,proj:s.projectedTotal,fmt:L,rate:false},
+    {l:'Bills',tgt:kt.bills,act:s.mtdBills,proj:tr.bills?tr.bills.projected:de>0?Math.round(s.mtdBills/de*totalDays):s.mtdBills,fmt:N,rate:false},
+    {l:'Walk-ins',tgt:kt.walkIns,act:s.mtdWalkIns,proj:tr.walkIns?tr.walkIns.projected:de>0?Math.round(s.mtdWalkIns/de*totalDays):s.mtdWalkIns,fmt:N,rate:false},
+    {l:'Conversion %',tgt:kt.conversion,act:s.convActual,proj:s.convActual,fmt:v=>v+'%',rate:true},
+    {l:'ABV ₹',tgt:kt.abv,act:s.abv,proj:s.abv,fmt:v=>v?'₹'+Math.round(v).toLocaleString('en-IN'):'—',rate:true},
+    {l:'UPT',tgt:kt.upt,act:s.upt,proj:s.upt,fmt:v=>R2(v),rate:true},
+  ];
+  const kpiHtml=kpis.map(k=>{
+    const hasTgt=k.tgt&&k.tgt>0;
+    const pct=hasTgt?Math.round((k.rate?k.act:k.proj)/k.tgt*100):null;
+    const col=pct!==null?pcl(pct):'var(--ink3)';
+    const cls=pct===null?'grey':pct>=100?'green':'red';
+    const gap=(k.proj||0)-k.tgt;
+    const bw=pct!==null?Math.min(pct,100):0;
+    return `<div class="kpi-prog ${cls}">
+      <div class="kph"><span class="kpn">${k.l}</span><span class="kps" style="color:${col};">${pct===null?'No target':pct>=100?'✓ On track ('+pct+'%)':'✗ Behind ('+pct+'%)'}</span></div>
+      <div class="kpg">
+        <div><div class="kg-l">Target</div><div class="kg-v">${hasTgt?k.fmt(k.tgt):'—'}</div></div>
+        <div><div class="kg-l">Actual</div><div class="kg-v" style="color:${col};">${k.fmt(k.act||0)}</div></div>
+        <div><div class="kg-l">${k.rate?'Current':'Projected'}</div><div class="kg-v" style="color:${col};">${hasTgt?k.fmt(k.proj||0):'—'}</div></div>
+        <div><div class="kg-l">Gap</div><div class="kg-v" style="color:${pct===null?'var(--ink3)':pct>=100?'var(--green)':'var(--red)'};">${hasTgt?(gap>=0?'+':'')+k.fmt(Math.abs(gap)):'—'}</div></div>
+      </div>
+      ${hasTgt?`<div class="prog-bar"><div class="prog-fill" style="width:${bw}%;background:${col};"></div></div>`:''}
+    </div>`;
+  }).join('');
+
+  const dayRows=(s.daySales||[]).map((v,i)=>{
+    const lbl=labels[i]||('Day '+(i+1));
+    const p=dTgt&&v?Math.round(v/dTgt*100):v>0?100:0;
+    return `<tr><td style="padding:4px 8px;border-bottom:1px solid var(--line);">${lbl}</td>
+      <td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--line);font-family:'DM Mono',monospace;color:${v?p<100?'var(--red)':'var(--green)':'var(--ink3)'};">${v?L(v):'—'}</td>
+      <td style="text-align:right;padding:4px 8px;border-bottom:1px solid var(--line);font-weight:700;color:${p<100?'var(--red)':'var(--green)'};">${v?p+'%':'—'}</td></tr>`;
+  }).join('');
+
+  document.getElementById('db').innerHTML=kpiHtml+`
+    <div style="font-size:10px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.07em;margin:12px 0 6px;">Day-wise Sales</div>
+    <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead><tr style="background:var(--paper3);">
+        <th style="text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase;border-bottom:1px solid var(--line);">Day</th>
+        <th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;border-bottom:1px solid var(--line);">Sales</th>
+        <th style="text-align:right;padding:5px 8px;font-size:10px;text-transform:uppercase;border-bottom:1px solid var(--line);">vs Daily Tgt</th>
+      </tr></thead>
+      <tbody>${dayRows}</tbody>
+      <tr style="background:var(--paper3);font-weight:700;">
+        <td style="padding:5px 8px;">MTD</td>
+        <td style="text-align:right;padding:5px 8px;font-family:'DM Mono',monospace;">${L(s.mtdSales)}</td>
+        <td style="text-align:right;padding:5px 8px;color:${pcl(s.pct)};">${s.pct}%</td>
+      </tr>
+    </table></div>`;
+  document.getElementById('drill-bg').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeDrill(){document.getElementById('drill-bg').classList.remove('open');document.body.style.overflow='';}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrill();});
+
+/* ══ TABS ══ */
+function showTab(id,el){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');el.classList.add('active');
+}
+
+/* ══ USERS ══ */
+function renderUsers(users){
+  const el=document.getElementById('uchips');if(!el) return;
+  if(!users||!users.length){el.innerHTML='<span style="font-size:11px;color:#5070c0;">Only you</span>';return;}
+  el.innerHTML=users.map((u,i)=>{
+    const me=u.id===MY_ID,in2=(u.name||'?').substring(0,2).toUpperCase();
+    return `<div class="uchip" style="${me?'border-color:var(--blue-m);background:#deeafc;':''}"><div class="uav" style="background:${UCOLS[i%UCOLS.length]};">${in2}</div><span style="${me?'color:var(--blue);font-weight:600;':''}">${u.name||'Anonymous'}${me?' (you)':''}</span></div>`;
+  }).join('');
+  document.getElementById('ubar').style.display='flex';
+}
+function setMyName(v){myName=v.trim();if(myName)localStorage.setItem('dash_uname',myName);}
+
+/* ══ UTILS ══ */
+function setst(msg,state){document.getElementById('sdot').className='sdot'+(state==='warn'?' warn':state==='err'?' err':'');document.getElementById('stxt').textContent=msg;}
+function ibar(msg,type){const el=document.getElementById('ibar');if(!msg){el.style.display='none';return;}el.style.display='block';el.className='ibar '+(type||'inf');el.textContent=msg;}
+
+/* ══ DEMO ══ */
+function loadDemo(){
+  const r=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
+  const stores=[
+    {name:'BLR - COMMERCIAL STREET (BLRCST)',rm:'Sathish Kumar',cm:'Mudassir',t:8100000,kt:{sales:8100000,bills:1800,conversion:40,abv:4500,walkIns:4500,upt:2.46}},
+    {name:'BLR - MANTRI MALL (BLRMNT)',rm:'Sathish Kumar',cm:'Ambarish',t:3500000,kt:{sales:3500000,bills:972,conversion:35,abv:3600,walkIns:2778,upt:2.37}},
+    {name:'BLR - JAYNAGAR (BLRJAY)',rm:'Manirathnam',cm:'Kanagarathinam',t:8600000,kt:{sales:8600000,bills:1686,conversion:53,abv:5100,walkIns:3182,upt:2.60}},
+    {name:'BLR - HSR LAYOUT (BLRHSR)',rm:'Manirathnam',cm:'Azra',t:7800000,kt:{sales:7800000,bills:1857,conversion:46,abv:4200,walkIns:4037,upt:2.58}},
+    {name:'BLR - BASAWESHWAR NAGAR (BLRBSW)',rm:'Manirathnam',cm:'Kanagarathinam',t:3400000,kt:{sales:3400000,bills:756,conversion:48,abv:4500,walkIns:1574,upt:2.60}},
+    {name:'BLR - SAHAKARNAGAR (BLRSKR)',rm:'Sathish Kumar',cm:'Mudassir',t:4000000,kt:{sales:4000000,bills:1026,conversion:47,abv:3900,walkIns:2182,upt:2.40}},
+    {name:'BLR - INDIRANAGAR (BLRIND)',rm:'Sathish Kumar',cm:'Ambarish',t:4500000,kt:{sales:4500000,bills:918,conversion:46,abv:4900,walkIns:1996,upt:2.70}},
+    {name:'BLR - BEL ROAD (BLRBEL)',rm:'Sathish Kumar',cm:'Mudassir',t:2000000,kt:{sales:2000000,bills:541,conversion:45,abv:3700,walkIns:1201,upt:2.53}},
+    {name:'BLR - RMZ MALL (BLRRMZ)',rm:'Sathish Kumar',cm:'Mudassir',t:2000000,kt:{sales:2000000,bills:588,conversion:32,abv:3400,walkIns:1838,upt:2.35}},
+    {name:'BLR - GARUDA MALL (BLRGRD)',rm:'Sathish Kumar',cm:'Ambarish',t:700000,kt:{sales:700000,bills:250,conversion:33,abv:2800,walkIns:758,upt:2.44}},
+    {name:'MGL - CITY CENTER MALL (MGLCCM)',rm:'Manirathnam',cm:'Kanagarathinam',t:1900000,kt:{sales:1900000,bills:500,conversion:40,abv:3800,walkIns:1250,upt:2.30}},
+    {name:'KCH - LULU MALL (KCHLUL)',rm:'Manirathnam',cm:'Azra',t:2600000,kt:{sales:2600000,bills:650,conversion:42,abv:4000,walkIns:1548,upt:2.45}},
+    {name:'MYS - DEVRAJ URS ROAD (MYSDUR)',rm:'Manirathnam',cm:'Kanagarathinam',t:5100000,kt:{sales:5100000,bills:1200,conversion:45,abv:4250,walkIns:2667,upt:2.50}},
+    {name:'BGM - AMBEDKAR ROAD (BGMABR)',rm:'Sathish Kumar',cm:'Mudassir',t:1900000,kt:{sales:1900000,bills:450,conversion:38,abv:4222,walkIns:1184,upt:2.35}},
+    {name:'TRV - LULU MALL (TRVLUL)',rm:'Manirathnam',cm:'Azra',t:1600000,kt:{sales:1600000,bills:380,conversion:41,abv:4211,walkIns:927,upt:2.40}},
+    {name:'BLR - MALLESWARAM (BLRMAL)',rm:'Sathish Kumar',cm:'Ambarish',t:1900000,kt:{sales:1900000,bills:427,conversion:41,abv:4450,walkIns:1041,upt:2.57}},
+    {name:'BLR - RR NAGAR (BLRRRN)',rm:'Manirathnam',cm:'Azra',t:3400000,kt:{sales:3400000,bills:1030,conversion:44,abv:3300,walkIns:2342,upt:2.14}},
+    {name:'BLR - DVG ROAD (BLRDVG)',rm:'Manirathnam',cm:'Kanagarathinam',t:2400000,kt:{sales:2400000,bills:600,conversion:40,abv:4000,walkIns:1500,upt:2.42}},
+    {name:'BLR - FORUM SHANTINIKETAN (BLRSNK)',rm:'Sathish Kumar',cm:'Ambarish',t:3900000,kt:{sales:3900000,bills:1147,conversion:33,abv:3400,walkIns:3476,upt:2.29}},
+    {name:'BLR - KATHRIGUPPE (BLRKGP)',rm:'Manirathnam',cm:'Azra',t:2000000,kt:{sales:2000000,bills:556,conversion:38,abv:3600,walkIns:1462,upt:2.29}},
+  ];
+  const lbl=Array.from({length:14},(_,i)=>'Apr-'+(i+1));
+  raw=stores.map(s=>{
+    const ds=Array.from({length:14},(_,i)=>i===13&&Math.random()<0.3?0:Math.round(s.t/30*r(55,130)/100));
+    const ms=ds.reduce((a,b)=>a+b,0);
+    const mb=Math.round(ms/(s.kt.abv||3500));
+    const mq=Math.round(mb*(s.kt.upt||2.4));
+    const mw=Math.round(mb/((s.kt.conversion||40)/100));
+    const conv=mw?Math.round(mb/mw*1000)/10:0;
+    const abv=mb?Math.round(ms/mb):0;
+    const upt=mb?Math.round(mq/mb*100)/100:0;
+    const pct=Math.round(ms/s.t*100);
+    const proj=Math.round(ms/14*30);
+    const tp=Math.round(proj/s.t*100);
+    const codeM=s.name.match(/\(([A-Z0-9]+)\)/),code=codeM?codeM[1]:'???';
+    const cy=code.match(/^([A-Z]{3})/),city=cy?cy[1]:'BLR';
+    const tr={};
+    if(s.kt.bills) tr.bills={projected:Math.round(mb/14*30),pct:Math.round(mb/14*30/s.kt.bills*100)};
+    if(s.kt.walkIns) tr.walkIns={projected:Math.round(mw/14*30),pct:Math.round(mw/14*30/s.kt.walkIns*100)};
+    if(s.kt.conversion) tr.conversion={projected:conv,pct:Math.round(conv/s.kt.conversion*100)};
+    if(s.kt.abv) tr.abv={projected:abv,pct:Math.round(abv/s.kt.abv*100)};
+    if(s.kt.upt) tr.upt={projected:upt,pct:Math.round(upt/s.kt.upt*100)};
+    return {name:s.name,code,city,rm:s.rm,cm:s.cm,target:s.t,
+      mtdSales:ms,mtdBills:mb,mtdSoldQty:mq,mtdWalkIns:mw,
+      todaySales:ds[13],pct,abv,upt,convActual:conv,
+      projectedTotal:proj,trendingPct:tp,trendStatus:tp>=100?'on-track':tp>=85?'at-risk':'behind',
+      daysCount:14,daySales:ds,kpiTargets:s.kt,kpiTrending:tr};
+  });
+  labels=lbl;totalDays=30;activeURL='';
+  buildFilters(['APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB','MAR']);
+  buildDayFilters();
+  applyFilters();
+  setst('Demo · '+raw.length+' stores',false);ibar('','');
+}
+
+/* ══ INIT ══ */
+window.addEventListener('load',()=>{
+  const inp=document.getElementById('my-name');if(myName)inp.value=myName;
+  if(SAVED_URL){document.getElementById('apps-url').value=SAVED_URL;load(SAVED_URL,'APR');return;}
+  const su=localStorage.getItem('dash_url'),ss=localStorage.getItem('dash_sheet')||'APR';
+  if(su){
+    document.getElementById('apps-url').value=su;
+    document.getElementById('sheet-sel').value=ss;
+    document.getElementById('save-chk').checked=true;
+    document.getElementById('forget-btn').style.display='inline-block';
+    ibar('Auto-loading from saved URL…','inf');
+    load(su,ss);return;
+  }
+  loadDemo();
+});
+</script>
+</body>
+</html>
