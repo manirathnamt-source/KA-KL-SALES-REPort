@@ -170,6 +170,11 @@ tr:hover .dfx2{background:#fafafa;}
 ::-webkit-scrollbar{width:6px;height:5px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:3px;}
+.grp-clickable{color:var(--blue);cursor:pointer;text-decoration:underline dotted;font-weight:600;}
+.grp-clickable:hover{text-decoration:underline;}
+.kpi-click{cursor:pointer;}
+.kpi-click:hover{filter:brightness(0.92);}
+
 </style>
 </head>
 <body>
@@ -197,11 +202,13 @@ tr:hover .dfx2{background:#fafafa;}
   <label class="lbl">Live reload</label>
   <select id="live-interval" onchange="setLiveReload()">
     <option value="0">Off</option>
-    <option value="60">Every 1 min</option>
+    <option value="30">Every 30 sec</option>
+    <option value="60" selected>Every 1 min ✓</option>
+    <option value="120">Every 2 min</option>
     <option value="300">Every 5 min</option>
     <option value="900">Every 15 min</option>
   </select>
-  <span id="live-badge" style="display:none;font-size:10px;font-weight:600;color:var(--green);background:var(--green-l);border-radius:20px;padding:2px 8px;">● LIVE</span>
+  <span id="live-badge" style="display:none;font-size:10px;font-weight:600;color:var(--green);background:var(--green-l);border-radius:20px;padding:2px 10px;white-space:nowrap;">● LIVE</span>
 </div>
 
 <!-- INFO BAR -->
@@ -390,6 +397,20 @@ tr:hover .dfx2{background:#fafafa;}
 
 </div><!-- /content -->
 
+<!-- KPI BREAKDOWN POPUP -->
+<div class="modal-bg" id="bd-modal" onclick="if(event.target===this)closeBDPopup()">
+  <div class="modal" style="max-width:600px;">
+    <div class="mhd">
+      <div>
+        <div style="font-size:14px;font-weight:600;" id="bd-title">KPI Breakdown</div>
+        <div style="font-size:11px;color:var(--ink3);margin-top:2px;" id="bd-sub"></div>
+      </div>
+      <div class="mcl" onclick="closeBDPopup()">&#x2715;</div>
+    </div>
+    <div class="mbd" id="bd-body"></div>
+  </div>
+</div>
+
 <!-- STORE DRILL MODAL -->
 <div class="modal-bg" id="drill-bg" onclick="if(event.target===this)closeDrill()">
   <div class="modal">
@@ -404,6 +425,7 @@ tr:hover .dfx2{background:#fafafa;}
 <script>
 /* ══ CONFIG ══ */
 const SAVED_URL = '';
+const API_KEY   = '4NJqtPi77ctO3Ec5acEenwwa17XHEFhT'; // must match SECRET_KEY in Apps Script
 
 /* ══ STATE ══ */
 let raw=[], labels=[], totalDays=30, activeSheet='APR', activeURL='';
@@ -439,7 +461,7 @@ function jfetch(url,sheet,action){
     window[cb]=d=>{clearTimeout(t);cleanup();d&&d.error?rej(new Error(d.error)):res(d);};
     function cleanup(){delete window[cb];el.parentNode&&el.parentNode.removeChild(el);}
     el.onerror=()=>{clearTimeout(t);cleanup();rej(new Error('Script load failed'));};
-    let src=url+'?sheet='+encodeURIComponent(sheet)+'&callback='+cb;
+    let src=url+'?sheet='+encodeURIComponent(sheet)+'&callback='+cb+'&key='+encodeURIComponent(API_KEY)+'&t='+Date.now(); // t= busts CDN cache
     if(action) src+='&action='+action;
     src+='&userId='+encodeURIComponent(MY_ID)+'&userName='+encodeURIComponent(myName||'User');
     el.src=src; document.head.appendChild(el);
@@ -473,6 +495,17 @@ function ingest(d,url,sheet){
   if(d.activeUsers)renderUsers(d.activeUsers);
   document.getElementById('ubar').style.display='flex';
   setst('Live · '+raw.length+' stores · '+ts(),false);
+  // Auto-start 60s live reload on first connect
+  if(!liveTimer){
+    document.getElementById('live-interval').value='60';
+    setLiveReload();
+  }
+  // Show server fetch time if available
+  if(d&&d.fetchedAt){
+    const badge=document.getElementById('live-badge');
+    badge.style.display='inline-block';
+    badge.textContent='● LIVE — updated '+d.fetchedAt;
+  }
 }
 async function doRefresh(){activeURL?await load(activeURL,activeSheet):loadDemo();}
 async function changeMonth(){
@@ -497,15 +530,27 @@ function setLiveReload(){
   if(liveTimer){clearInterval(liveTimer);liveTimer=null;}
   const badge=document.getElementById('live-badge');
   if(sec>0&&activeURL){
-    liveTimer=setInterval(async()=>{
+    // Smart poll: fetch fresh data, show last-updated time
+    const poll=async()=>{
       if(!activeURL) return;
-      try{const d=await jfetch(activeURL,activeSheet);ingest(d,activeURL,activeSheet);}catch(e){}
-    },sec*1000);
+      try{
+        const d=await jfetch(activeURL,activeSheet);
+        ingest(d,activeURL,activeSheet);
+        // Show fetchedAt from server if available
+        const ft=d&&d.fetchedAt?d.fetchedAt:new Date().toLocaleTimeString('en-IN');
+        badge.textContent='● LIVE — updated '+ft;
+        badge.style.color='var(--green)';
+      }catch(e){
+        badge.textContent='● LIVE — retry...';
+        badge.style.color='var(--amber)';
+      }
+    };
+    liveTimer=setInterval(poll,sec*1000);
     badge.style.display='inline-block';
-    ibar('🔄 Live reload every '+Math.round(sec/60)+' min. Data updates as soon as team enters sales!','inf');
+    badge.textContent='● LIVE — '+sec+'s poll';
+    // Show live info in bar (don't use ibar — it's distracting on poll)
   } else {
     badge.style.display='none';
-    if(sec===0&&liveTimer===null) ibar('','');
   }
 }
 
@@ -665,15 +710,18 @@ function renderGroup(key,bid){
     const aat=g.n?Math.round(g.at/g.n):0;
     const aut=g.n?Math.round(g.ut/g.n*100)/100:0;
     return `<tr class="${tp<100?'rr':''}">
-      <td style="font-weight:600;">${nm}</td>
-      <td class="r">${L(g.t)}</td><td class="r" style="font-weight:600;">${L(g.s)}</td>
+      <td style="font-weight:600;color:var(--blue);cursor:pointer;text-decoration:underline dotted;" onclick="filterByGroup('${key}','${nm}')" title="Click to filter stores by ${nm}">${nm}</td>
+      <td class="r">${L(g.t)}</td>
+      <td class="r" style="font-weight:600;cursor:pointer;" onclick="showKPIBreakdown('sales','${key}','${nm}')" title="Click to see store-wise sales breakdown">${L(g.s)}</td>
       <td class="r ${pc(ap)}">${ap}%</td>
-      <td>${bar(tp)}</td><td class="r ${pc(tp)}">${tp}%</td>
-      <td class="r">${N(g.mw)}</td><td class="r dim">${g.wt?N(g.wt):'—'}</td>
-      <td>${wp!==null?bar(wp):'<span class="dim">—</span>'}</td>
-      <td class="r ${act&&conv<act?'rv':conv>=act&&act?'gv':''}">${conv}%</td>
+      <td style="cursor:pointer;" onclick="showKPIBreakdown('projection','${key}','${nm}')" title="Click to see sales projection breakdown">${bar(tp)}</td>
+      <td class="r ${pc(tp)}" style="cursor:pointer;" onclick="showKPIBreakdown('projection','${key}','${nm}')" title="Click to see stores not on track">${tp}%${tp<100?' ⚠️':''}</td>
+      <td class="r" style="cursor:pointer;" onclick="showKPIBreakdown('walkins','${key}','${nm}')" title="Click to see walk-ins breakdown">${N(g.mw)}</td>
+      <td class="r dim">${g.wt?N(g.wt):'—'}</td>
+      <td style="cursor:pointer;" onclick="${g.wt?`showKPIBreakdown('walkins','${key}','${nm}')`:''}">${wp!==null?bar(wp):'<span class="dim">—</span>'}</td>
+      <td class="r ${act&&conv<act?'rv':conv>=act&&act?'gv':''}" style="${act?'cursor:pointer;':''}" onclick="${act?`showKPIBreakdown('conversion','${key}','${nm}')`:''}" title="Click to see conversion breakdown">${conv}%${act&&conv<act?' ⚠️':''}</td>
       <td class="r dim">${act?act+'%':'—'}</td>
-      <td class="r ${aat&&abv<aat?'rv':abv>=aat&&aat?'gv':''}">${abv?'₹'+abv.toLocaleString('en-IN'):'—'}</td>
+      <td class="r ${aat&&abv<aat?'rv':abv>=aat&&aat?'gv':''}" style="${aat?'cursor:pointer;':''}" onclick="${aat?`showKPIBreakdown('abv','${key}','${nm}')`:''}" title="Click to see ABV breakdown">${abv?'₹'+abv.toLocaleString('en-IN'):'—'}${aat&&abv<aat?' ⚠️':''}</td>
       <td class="r dim">${aat?'₹'+aat.toLocaleString('en-IN'):'—'}</td>
       <td class="r ${aut&&upt<aut?'rv':upt>=aut&&aut?'gv':''}">${upt}</td>
       <td class="r dim">${aut||'—'}</td>
@@ -1193,6 +1241,214 @@ window.addEventListener('load',()=>{
   }
   loadDemo();
 });
+
+/* ══ Filter by RM or CM click ══ */
+function filterByGroup(key, value) {
+  const selId = key === 'rm' ? 'g-rm' : 'g-cm';
+  const el = document.getElementById(selId);
+  if (!el) return;
+  // Toggle off if already selected
+  if (el.value === value) {
+    el.value = '';
+  } else {
+    el.value = value;
+  }
+  applyFilters();
+  // Scroll to top so user sees the filter applied
+  document.querySelector('.content').scrollTo({top: 0, behavior: 'smooth'});
+}
+
+/* ══ KPI Breakdown popup — all KPIs ══ */
+function showKPIBreakdown(kpiKey, groupKey, groupValue) {
+  const groupStores = filtered.filter(s => s[groupKey] === groupValue);
+  if (!groupStores.length) return;
+
+  const groupLabel = groupKey === 'rm' ? 'RM' : 'CM';
+
+  // ── KPI config: label, actual value fn, target fn, format fn, is rate ──
+  const KPI_CFG = {
+    sales: {
+      label: 'MTD Sales',
+      actual: s => s.mtdSales,
+      target: s => s.target,
+      fmt:    v => L(v),
+      gap:    (a,t) => (a>=t?'+':'') + L(Math.abs(a-t)),
+      sort:   (a,b) => {
+        const pa = a.target?Math.round(a.mtdSales/a.target*100):100;
+        const pb = b.target?Math.round(b.mtdSales/b.target*100):100;
+        return pa-pb;
+      },
+      isBelow: s => s.target>0 && s.mtdSales < s.target,
+      pct:    s => s.target?Math.round(s.mtdSales/s.target*100):null,
+      extraCols: ['CM','Target','MTD Sales','Ach%','Gap vs Target'],
+      extraVals: s => {
+        const p = s.target?Math.round(s.mtdSales/s.target*100):null;
+        return [s.cm, L(s.target), L(s.mtdSales), p!==null?p+'%':'—',
+                s.target?(s.mtdSales>=s.target?'+':'')+L(Math.abs(s.mtdSales-s.target)):'—'];
+      }
+    },
+    projection: {
+      label: 'Sales Projection (EOM)',
+      actual: s => s.projectedTotal,
+      target: s => s.target,
+      fmt:    v => L(v),
+      gap:    (a,t) => (a>=t?'+':'') + L(Math.abs(a-t)),
+      sort:   (a,b) => (a.trendingPct||0)-(b.trendingPct||0),
+      isBelow: s => s.trendingPct < 100,
+      pct:    s => s.trendingPct||0,
+      extraCols: ['CM','Target','MTD Sales','Proj (EOM)','Proj%','Gap'],
+      extraVals: s => {
+        const tp = s.trendingPct||0;
+        return [s.cm, L(s.target), L(s.mtdSales), L(s.projectedTotal),
+                tp+'%', (s.projectedTotal>=s.target?'+':'')+L(Math.abs(s.projectedTotal-s.target))];
+      }
+    },
+    walkins: {
+      label: 'Walk-ins',
+      actual: s => s.mtdWalkIns,
+      target: s => (s.kpiTargets||{}).walkIns||0,
+      fmt:    v => N(v),
+      gap:    (a,t) => t?(a>=t?'+':'')+N(Math.abs(a-t)):'—',
+      sort:   (a,b) => {
+        const kt_a=(a.kpiTargets||{}), kt_b=(b.kpiTargets||{});
+        const pa=kt_a.walkIns?Math.round(a.mtdWalkIns/kt_a.walkIns*100):100;
+        const pb=kt_b.walkIns?Math.round(b.mtdWalkIns/kt_b.walkIns*100):100;
+        return pa-pb;
+      },
+      isBelow: s => {const kt=s.kpiTargets||{};return kt.walkIns>0 && s.mtdWalkIns<kt.walkIns;},
+      pct:    s => {const kt=s.kpiTargets||{};return kt.walkIns?Math.round(s.mtdWalkIns/kt.walkIns*100):null;},
+      extraCols: ['CM','W-in Target','Walk-ins','Ach%','Gap'],
+      extraVals: s => {
+        const kt=s.kpiTargets||{}, p=kt.walkIns?Math.round(s.mtdWalkIns/kt.walkIns*100):null;
+        return [s.cm, kt.walkIns?N(kt.walkIns):'—', N(s.mtdWalkIns),
+                p!==null?p+'%':'—', kt.walkIns?(s.mtdWalkIns>=kt.walkIns?'+':'')+N(Math.abs(s.mtdWalkIns-kt.walkIns)):'—'];
+      }
+    },
+    conversion: {
+      label: 'Conversion %',
+      actual: s => s.convActual,
+      target: s => (s.kpiTargets||{}).conversion||0,
+      fmt:    v => v+'%',
+      gap:    (a,t) => t?(a>=t?'+':'')+Math.abs(a-t).toFixed(1)+'%':'—',
+      sort:   (a,b) => {
+        const kt_a=(a.kpiTargets||{}), kt_b=(b.kpiTargets||{});
+        const pa=kt_a.conversion?Math.round(a.convActual/kt_a.conversion*100):100;
+        const pb=kt_b.conversion?Math.round(b.convActual/kt_b.conversion*100):100;
+        return pa-pb;
+      },
+      isBelow: s => {const kt=s.kpiTargets||{};return kt.conversion>0 && s.convActual<kt.conversion;},
+      pct:    s => {const kt=s.kpiTargets||{};return kt.conversion?Math.round(s.convActual/kt.conversion*100):null;},
+      extraCols: ['CM','Conv Target','Conv %','Ach%','Gap','Walk-ins','Bills'],
+      extraVals: s => {
+        const kt=s.kpiTargets||{}, p=kt.conversion?Math.round(s.convActual/kt.conversion*100):null;
+        return [s.cm, kt.conversion?kt.conversion+'%':'—', s.convActual+'%',
+                p!==null?p+'%':'—', kt.conversion?(s.convActual>=kt.conversion?'+':'')+Math.abs(s.convActual-kt.conversion).toFixed(1)+'%':'—',
+                N(s.mtdWalkIns), N(s.mtdBills)];
+      }
+    },
+    abv: {
+      label: 'ABV (Avg Bill Value)',
+      actual: s => s.abv,
+      target: s => (s.kpiTargets||{}).abv||0,
+      fmt:    v => v?'₹'+Math.round(v).toLocaleString('en-IN'):'—',
+      gap:    (a,t) => t?(a>=t?'+':'')+'₹'+Math.abs(Math.round(a-t)).toLocaleString('en-IN'):'—',
+      sort:   (a,b) => {
+        const kt_a=(a.kpiTargets||{}), kt_b=(b.kpiTargets||{});
+        const pa=kt_a.abv?Math.round(a.abv/kt_a.abv*100):100;
+        const pb=kt_b.abv?Math.round(b.abv/kt_b.abv*100):100;
+        return pa-pb;
+      },
+      isBelow: s => {const kt=s.kpiTargets||{};return kt.abv>0 && s.abv<kt.abv;},
+      pct:    s => {const kt=s.kpiTargets||{};return kt.abv?Math.round(s.abv/kt.abv*100):null;},
+      extraCols: ['CM','ABV Target','ABV','Ach%','Gap','UPT'],
+      extraVals: s => {
+        const kt=s.kpiTargets||{}, p=kt.abv?Math.round(s.abv/kt.abv*100):null;
+        return [s.cm, kt.abv?'₹'+kt.abv.toLocaleString('en-IN'):'—',
+                s.abv?'₹'+s.abv.toLocaleString('en-IN'):'—',
+                p!==null?p+'%':'—',
+                kt.abv?(s.abv>=kt.abv?'+':'')+'₹'+Math.abs(Math.round(s.abv-(kt.abv||0))).toLocaleString('en-IN'):'—',
+                R2(s.upt)];
+      }
+    }
+  };
+
+  const cfg = KPI_CFG[kpiKey];
+  if (!cfg) return;
+
+  // Split stores into below/on-target
+  const below = groupStores.filter(s => cfg.isBelow(s)).sort(cfg.sort);
+  const onTarget = groupStores.filter(s => !cfg.isBelow(s)).sort((a,b) => (cfg.pct(b)||0)-(cfg.pct(a)||0));
+
+  // Build table row
+  const makeRow = (s, highlight) => {
+    const pct = cfg.pct(s);
+    const cl  = pct===null?'':pct>=100?'gv':'rv';
+    const tgt = cfg.target(s);
+    const act = cfg.actual(s);
+    const cols = cfg.extraVals(s);
+    const hdrCols = cfg.extraCols;
+    return `<tr style="cursor:pointer;" onclick="closeBDPopup();openDrill('${s.code}')">
+      <td style="font-weight:600;color:var(--blue);padding:5px 9px;">${s.code}</td>
+      ${cols.map((v,i) => `<td class="r" style="padding:5px 9px;${i===cols.length-2?'font-weight:700;'+( pct!==null&&pct<100?'color:var(--red)':'color:var(--green)'):''}${i===cols.length-1?'color:'+(pct!==null&&pct<100?'var(--red)':'var(--green)')+'':''}">${v}</td>`).join('')}
+    </tr>`;
+  };
+
+  const makeTable = (stores, borderCol, bgCol) => {
+    const hdrCols = cfg.extraCols;
+    return `<div style="overflow-x:auto;border-radius:var(--r);border:1px solid ${borderCol};margin-bottom:14px;">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr style="background:${bgCol};">
+          <th style="padding:6px 9px;text-align:left;font-size:10px;text-transform:uppercase;border-bottom:1px solid ${borderCol};white-space:nowrap;">Store</th>
+          ${hdrCols.map(h=>`<th style="padding:6px 9px;text-align:right;font-size:10px;text-transform:uppercase;border-bottom:1px solid ${borderCol};white-space:nowrap;">${h}</th>`).join('')}
+        </tr></thead>
+        <tbody>${stores.map(s=>makeRow(s)).join('')}</tbody>
+      </table>
+    </div>`;
+  };
+
+  // Summary bar
+  const totalStores = groupStores.length;
+  const belowCount  = below.length;
+  const onCount     = onTarget.length;
+  const barW        = Math.round(onCount/totalStores*100);
+
+  document.getElementById('bd-title').textContent = cfg.label + ' — ' + groupLabel + ': ' + groupValue;
+  document.getElementById('bd-sub').textContent   =
+    belowCount + ' stores below target · ' + onCount + ' stores on/above target · ' + totalStores + ' total';
+
+  document.getElementById('bd-body').innerHTML = `
+    <!-- Summary progress bar -->
+    <div style="background:var(--paper3);border-radius:var(--r);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;">
+      <div style="flex:1;height:10px;background:var(--red-l);border-radius:5px;overflow:hidden;border:1px solid var(--red-m);">
+        <div style="width:${barW}%;height:100%;background:var(--green);border-radius:5px;"></div>
+      </div>
+      <span style="font-size:12px;font-weight:700;color:${barW>=100?'var(--green)':barW>=75?'var(--amber)':'var(--red)'};">${barW}% on track</span>
+    </div>
+
+    ${below.length > 0 ? `
+      <div style="font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">
+        ✗ Below target — ${below.length} store${below.length>1?'s':''} (sorted worst first · click to drill down)
+      </div>
+      ${makeTable(below,'var(--red-m)','var(--red-l)')}
+    ` : `<div style="background:var(--green-l);border:1px solid var(--green-m);border-radius:var(--r);padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--green);font-weight:600;">✓ All stores meeting the ${cfg.label} target!</div>`}
+
+    ${onTarget.length > 0 ? `
+      <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">
+        ✓ On / above target — ${onTarget.length} store${onTarget.length>1?'s':''}
+      </div>
+      ${makeTable(onTarget,'var(--green-m)','var(--green-l)')}
+    ` : ''}
+  `;
+
+  document.getElementById('bd-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeBDPopup() {
+  document.getElementById('bd-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
 </script>
 </body>
 </html>
