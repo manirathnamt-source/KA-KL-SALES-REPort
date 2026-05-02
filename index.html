@@ -816,17 +816,20 @@ function showInfo(msg,type){
 // ═══════════════════════════════════════════
 // JSONP
 // ═══════════════════════════════════════════
-function jfetch(url,sheet,action){
+function jfetch(url,sheet,action,extraParams){
   return new Promise(function(res,rej){
     var cb='cb_'+Date.now()+'_'+Math.random().toString(36).substr(2,4);
     var el=document.createElement('script');
-    var t=setTimeout(function(){cleanup();rej(new Error('Timeout — check URL and deployment'));},20000);
-    window[cb]=function(d){clearTimeout(t);cleanup();d&&d.error?rej(new Error(d.error)):res(d);};
-    function cleanup(){delete window[cb];if(el.parentNode)el.parentNode.removeChild(el);}
-    el.onerror=function(){clearTimeout(t);cleanup();rej(new Error('Script load failed'));};
+    var t=setTimeout(function(){cleanup();rej(new Error('Timeout — YTD reads all months (can take 60s). Try again or reduce months'));},60000);
+    window[cb]=function(d){clearTimeout(t);cleanup();
+      if(d&&d.error)rej(new Error(d.error));else res(d);
+    };
+    function cleanup(){delete window[cb];if(el&&el.parentNode)el.parentNode.removeChild(el);}
+    el.onerror=function(){clearTimeout(t);cleanup();rej(new Error('Script load failed — check Apps Script URL'));};
     var src=url+'?callback='+cb+'&t='+Date.now();
     if(sheet)src+='&sheet='+encodeURIComponent(sheet);
     if(action)src+='&action='+encodeURIComponent(action);
+    if(extraParams){Object.keys(extraParams).forEach(function(k){src+='&'+k+'='+encodeURIComponent(extraParams[k]);});}
     el.src=src;document.head.appendChild(el);
   });
 }
@@ -2054,7 +2057,7 @@ function loadYTD(){
   var btn=document.getElementById('ytd-load-btn');
   btn.textContent='...';btn.disabled=true;
   setYTDInfo('Loading YTD from APR to '+upto+' — this may take 30-60 seconds…','inf');
-  jfetch(activeURL,null,'ytd&upToMonth='+upto)
+  jfetch(activeURL,null,'ytd',{upToMonth:upto})
     .then(function(d){
       btn.textContent='▶ Load YTD';btn.disabled=false;
       if(!d){setYTDInfo('❌ No response from server','err');return;}
@@ -2066,7 +2069,12 @@ function loadYTD(){
     })
     .catch(function(e){
       btn.textContent='▶ Load YTD';btn.disabled=false;
-      setYTDInfo('❌ '+e.message+' — ensure script is deployed as Web App','err');
+      var msg=e.message||'Unknown error';
+      // "Cannot read properties of undefined" means script error — give better guidance
+      if(msg.indexOf('undefined')!==-1||msg.indexOf('length')!==-1){
+        msg='Apps Script error — open Script editor Logs to see details. Common fix: re-run buildSummaryCache()';
+      }
+      setYTDInfo('❌ '+msg,'err');
     });
 }
 
