@@ -360,11 +360,11 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <!-- Quarter filter chips -->
   <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
     <span style="font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Quarter:</span>
-    <button id="ytd-all"  class="wkbtn active" onclick="filterYTD('')">All</button>
-    <button id="ytd-q1"   class="wkbtn" onclick="filterYTD('Q1')">Q1 Apr–Jun</button>
-    <button id="ytd-q2"   class="wkbtn" onclick="filterYTD('Q2')">Q2 Jul–Sep</button>
-    <button id="ytd-q3"   class="wkbtn" onclick="filterYTD('Q3')">Q3 Oct–Dec</button>
-    <button id="ytd-q4"   class="wkbtn" onclick="filterYTD('Q4')">Q4 Jan–Mar</button>
+    <button data-q="" class="wkbtn ytd-qbtn active" onclick="filterYTD('')">All</button>
+    <button data-q="Q1" class="wkbtn ytd-qbtn" onclick="filterYTD('Q1')">Q1 Apr–Jun</button>
+    <button data-q="Q2" class="wkbtn ytd-qbtn" onclick="filterYTD('Q2')">Q2 Jul–Sep</button>
+    <button data-q="Q3" class="wkbtn ytd-qbtn" onclick="filterYTD('Q3')">Q3 Oct–Dec</button>
+    <button data-q="Q4" class="wkbtn ytd-qbtn" onclick="filterYTD('Q4')">Q4 Jan–Mar</button>
   </div>
 
   <div class="sh"><span class="sh-t">RM — YTD Performance</span><div class="sh-l"></div></div>
@@ -381,7 +381,8 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <div class="sh"><span class="sh-t">CM — YTD Performance</span><div class="sh-l"></div></div>
   <div class="tw"><table id="t-ytd-cm"><thead><tr>
     <th onclick="srt('t-ytd-cm',0)">CM</th>
-    <th class="r" onclick="srt('t-ytd-cm',1)">YTD Target</th>
+    <th onclick="srt('t-ytd-cm',1)">RM</th>
+    <th class="r" onclick="srt('t-ytd-cm',2)">YTD Target</th>
     <th class="r" onclick="srt('t-ytd-cm',2)">YTD Sales</th>
     <th class="r" onclick="srt('t-ytd-cm',3)">Ach%</th>
     <th class="r" onclick="srt('t-ytd-cm',4)">ABV</th>
@@ -2038,176 +2039,232 @@ function shareWA(){
 }
 
 
+
 // ═══════════════════════════════════════════
 // YTD
 // ═══════════════════════════════════════════
-var ytdData=null, ytdQtrFilter='';
+var ytdData=null, ytdQtrFilter='', ytdLoaded=false;
+var QTR_MONTHS={Q1:['APR','MAY','JUN'],Q2:['JUL','AUG','SEP'],Q3:['OCT','NOV','DEC'],Q4:['JAN','FEB','MAR']};
 
 function loadYTD(){
-  if(!activeURL){showInfo('Load main data first','wrn');return;}
-  var upto=document.getElementById('ytd-upto').value||activeSheet;
+  if(!activeURL){
+    setYTDInfo('Connect to main dashboard first, then click Load YTD','wrn');return;
+  }
+  var upto=document.getElementById('ytd-upto').value||activeSheet||'APR';
   var btn=document.getElementById('ytd-load-btn');
   btn.textContent='...';btn.disabled=true;
-  setYTDInfo('Loading YTD data for APR–'+upto+'…','inf');
+  setYTDInfo('Loading YTD from APR to '+upto+' — this may take 30-60 seconds…','inf');
   jfetch(activeURL,null,'ytd&upToMonth='+upto)
     .then(function(d){
       btn.textContent='▶ Load YTD';btn.disabled=false;
-      if(d&&d.error){setYTDInfo('❌ '+d.error,'err');return;}
-      ytdData=d;renderYTD();
-      setYTDInfo('✅ YTD loaded: APR–'+upto+' | '+d.months.length+' months | '+d.stores.length+' stores','ok');
+      if(!d){setYTDInfo('❌ No response from server','err');return;}
+      if(d.error){setYTDInfo('❌ '+d.error,'err');return;}
+      if(!d.stores||!d.stores.length){setYTDInfo('❌ No store data returned — check sheet tabs are named APR, MAY etc','err');return;}
+      ytdData=d;ytdLoaded=true;
+      renderYTD();
+      setYTDInfo('✅ YTD loaded: APR–'+upto+' · '+d.months.length+' months · '+(d.stores||[]).length+' stores','ok');
     })
-    .catch(function(e){btn.textContent='▶ Load YTD';btn.disabled=false;setYTDInfo('❌ '+e.message,'err');});
+    .catch(function(e){
+      btn.textContent='▶ Load YTD';btn.disabled=false;
+      setYTDInfo('❌ '+e.message+' — ensure script is deployed as Web App','err');
+    });
 }
 
 function setYTDInfo(msg,type){
-  var el=document.getElementById('ytd-ibar');if(!msg){el.style.display='none';return;}
-  var st={inf:'background:var(--primary-bg);color:var(--primary);border:1px solid #93c5fd;',
+  var el=document.getElementById('ytd-ibar');
+  if(!msg||!el){if(el)el.style.display='none';return;}
+  var st={
+    inf:'background:var(--primary-bg);color:var(--primary);border:1px solid #93c5fd;',
     wrn:'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border);',
     err:'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);',
-    ok:'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);'};
-  el.style.cssText=(st[type]||st.inf)+'display:block;padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:10px;';
+    ok:'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);'
+  };
+  el.style.cssText=(st[type]||st.inf)+'display:block;padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:12px;font-weight:500;';
   el.textContent=msg;
 }
 
 function filterYTD(qtr){
+  if(!ytdLoaded){setYTDInfo('Click ▶ Load YTD first','wrn');return;}
   ytdQtrFilter=qtr;
-  document.querySelectorAll('[id^="ytd-"]').forEach(function(b){
-    if(b.classList.contains('wkbtn'))b.classList.toggle('active',b.id==='ytd-'+(qtr||'all'));
+  document.querySelectorAll('.ytd-qbtn').forEach(function(b){
+    b.classList.toggle('active',b.getAttribute('data-q')===(qtr||''));
   });
   renderYTD();
 }
 
-var QTR_MONTHS={Q1:['APR','MAY','JUN'],Q2:['JUL','AUG','SEP'],Q3:['OCT','NOV','DEC'],Q4:['JAN','FEB','MAR']};
-
 function renderYTD(){
-  if(!ytdData)return;
-  var stores=ytdData.stores||[];
-  var months=ytdData.months||[];
-  var rm=document.getElementById('sel-rm').value;
-  var cm=document.getElementById('sel-cm').value;
+  if(!ytdLoaded||!ytdData){
+    // Show placeholder only — do NOT show error
+    var placeholder='<div style="padding:60px;text-align:center;color:var(--text3);">'+
+      '<div style="font-size:32px;margin-bottom:12px;">⏱</div>'+
+      '<div style="font-size:14px;font-weight:600;margin-bottom:6px;">Year-to-Date Summary</div>'+
+      '<div style="font-size:12px;">Select a month above and click <b>▶ Load YTD</b> to see cumulative performance</div>'+
+    '</div>';
+    var kpiEl=document.getElementById('ytd-kpis');
+    if(kpiEl)kpiEl.innerHTML='';
+    var rmEl=document.getElementById('b-ytd-rm');
+    if(rmEl)rmEl.innerHTML=nd(7,'Click ▶ Load YTD to see data');
+    var cmEl=document.getElementById('b-ytd-cm');
+    if(cmEl)cmEl.innerHTML=nd(8,'Click ▶ Load YTD to see data');
+    var stEl=document.getElementById('b-ytd-store');
+    if(stEl)stEl.innerHTML=nd(9,'Click ▶ Load YTD to see data');
+    var mwEl=document.getElementById('ytd-monthly-wrap');
+    if(mwEl)mwEl.innerHTML=placeholder;
+    var titleEl=document.getElementById('ytd-title');
+    if(titleEl)titleEl.textContent='⏱ Year-to-Date Performance';
+    return;
+  }
 
-  // Apply RM/CM filter from main filters
-  var fStores=stores.filter(function(s){return(!rm||s.rm===rm)&&(!cm||s.cm===cm);});
+  var stores=(ytdData.stores||[]);
+  var months=(ytdData.months||[]);
+  var upToMonth=ytdData.upToMonth||months[months.length-1]||'APR';
 
-  // Apply quarter filter - sum only those months in the quarter
+  // RM/CM filter from main filters
+  var rm=(document.getElementById('sel-rm')||{}).value||'';
+  var cm=(document.getElementById('sel-cm')||{}).value||'';
+  var fStores=stores.filter(function(s){
+    return(!rm||s.rm===rm)&&(!cm||s.cm===cm);
+  });
+
+  // Quarter filter
   var qMonths=ytdQtrFilter?QTR_MONTHS[ytdQtrFilter]:null;
-  function getStoreSales(s){
-    if(!qMonths)return s.ytdSales;
-    var total=0;qMonths.forEach(function(m){if(s.monthlyData&&s.monthlyData[m])total+=s.monthlyData[m].sales;});return total;
+  var dispMonths=qMonths?months.filter(function(m){return qMonths.indexOf(m)!==-1;}):months;
+
+  function storeSales(s){
+    if(!qMonths)return s.ytdSales||0;
+    var t=0;qMonths.forEach(function(m){if(s.monthlyData&&s.monthlyData[m])t+=s.monthlyData[m].sales||0;});return t;
   }
-  function getStoreTgt(s){
-    if(!qMonths)return s.ytdTarget;
-    var total=0;qMonths.forEach(function(m){if(s.monthlyData&&s.monthlyData[m])total+=s.monthlyData[m].target;});return total;
+  function storeTgt(s){
+    if(!qMonths)return s.ytdTarget||0;
+    var t=0;qMonths.forEach(function(m){if(s.monthlyData&&s.monthlyData[m])t+=s.monthlyData[m].target||0;});return t;
   }
 
-  // KPI summary cards
-  var totSales=fStores.reduce(function(a,s){return a+getStoreSales(s);},0);
-  var totTgt  =fStores.reduce(function(a,s){return a+getStoreTgt(s);},0);
-  var totBills=fStores.reduce(function(a,s){return a+s.ytdBills;},0);
-  var totWalks=fStores.reduce(function(a,s){return a+s.ytdWalkIns;},0);
-  var avgPct  =totTgt?Math.round(totSales/totTgt*100):0;
-  var avgABV  =totBills?Math.round(totSales/totBills):0;
-  var avgConv =totWalks?Math.round(totBills/totWalks*1000)/10:0;
-  var label=(ytdQtrFilter||'Full YTD')+' APR–'+ytdData.upToMonth;
+  // KPI summary
+  var totSales=fStores.reduce(function(a,s){return a+storeSales(s);},0);
+  var totTgt  =fStores.reduce(function(a,s){return a+storeTgt(s);},0);
+  var totBills=fStores.reduce(function(a,s){return a+(s.ytdBills||0);},0);
+  var totWalks=fStores.reduce(function(a,s){return a+(s.ytdWalkIns||0);},0);
+  var achPct  =totTgt>0?Math.round(totSales/totTgt*100):0;
+  var avgABV  =totBills>0?Math.round(totSales/totBills):0;
+  var avgConv =totWalks>0?Math.round(totBills/totWalks*1000)/10:0;
+  var periodLabel=(ytdQtrFilter||'Full YTD')+' APR–'+upToMonth;
 
+  // Update title
+  var titleEl=document.getElementById('ytd-title');
+  if(titleEl)titleEl.textContent='⏱ YTD — '+periodLabel;
+
+  // KPI cards
   var kpiEl=document.getElementById('ytd-kpis');
   if(kpiEl)kpiEl.innerHTML=[
-    {l:'Period',       v:label,        s:months.length+' months'},
-    {l:'YTD Target',   v:L(totTgt),    s:'cumulative'},
-    {l:'YTD Sales',    v:L(totSales),  s:avgPct+'% achieved'},
-    {l:'Stores',       v:fStores.length,s:'in view'},
-    {l:'Avg ABV',      v:L(avgABV),    s:'ytd'},
-    {l:'Avg Conv%',    v:avgConv+'%',  s:'ytd'},
-  ].map(function(c){return'<div class="kc"><div class="kl">'+c.l+'</div><div class="kv">'+c.v+'</div><div class="ks">'+c.s+'</div></div>';}).join('');
-
-  // Title update
-  var titleEl=document.getElementById('ytd-title');
-  if(titleEl)titleEl.textContent='⏱ YTD — '+(ytdQtrFilter?ytdQtrFilter+' '+label:label);
+    {l:'Period',      v:periodLabel,  s:dispMonths.length+' month'+(dispMonths.length!==1?'s':'')},
+    {l:'YTD Target',  v:L(totTgt),    s:'cumulative', c:totTgt?'':'grn'},
+    {l:'YTD Sales',   v:L(totSales),  s:achPct+'% achieved', c:achPct>=100?'grn':achPct>0?'':''},
+    {l:'Stores',      v:fStores.length, s:'in view'},
+    {l:'Avg ABV',     v:avgABV?L(avgABV):'—', s:'ytd'},
+    {l:'Avg Conv%',   v:avgConv+'%',  s:'ytd'},
+  ].map(function(c){
+    return'<div class="kc '+(c.c||'')+'"><div class="kl">'+c.l+'</div><div class="kv">'+c.v+'</div><div class="ks">'+c.s+'</div></div>';
+  }).join('');
 
   // RM table
   var rmAgg={};
   fStores.forEach(function(s){
-    if(!rmAgg[s.rm])rmAgg[s.rm]={name:s.rm,sales:0,tgt:0,bills:0,walks:0,stores:0};
-    rmAgg[s.rm].sales+=getStoreSales(s);rmAgg[s.rm].tgt+=getStoreTgt(s);
-    rmAgg[s.rm].bills+=s.ytdBills;rmAgg[s.rm].walks+=s.ytdWalkIns;rmAgg[s.rm].stores++;
+    var k=s.rm||'Unknown';
+    if(!rmAgg[k])rmAgg[k]={name:k,sales:0,tgt:0,bills:0,walks:0,stores:0};
+    rmAgg[k].sales+=storeSales(s);rmAgg[k].tgt+=storeTgt(s);
+    rmAgg[k].bills+=(s.ytdBills||0);rmAgg[k].walks+=(s.ytdWalkIns||0);rmAgg[k].stores++;
   });
   document.getElementById('b-ytd-rm').innerHTML=Object.values(rmAgg).sort(function(a,b){return b.sales-a.sales;}).map(function(g){
-    var p=g.tgt?Math.round(g.sales/g.tgt*100):0;
-    var abv=g.bills?Math.round(g.sales/g.bills):0;
-    var conv=g.walks?Math.round(g.bills/g.walks*1000)/10:0;
-    return'<tr><td style="font-weight:700;color:var(--primary);">'+g.name+'</td>'+
+    var p=g.tgt>0?Math.round(g.sales/g.tgt*100):0;
+    var abv=g.bills>0?Math.round(g.sales/g.bills):0;
+    var conv=g.walks>0?Math.round(g.bills/g.walks*1000)/10:0;
+    return'<tr>'+
+      '<td style="font-weight:700;color:var(--primary);">'+g.name+'</td>'+
       '<td class="r">'+L(g.tgt)+'</td>'+
       '<td class="r" style="font-weight:700;">'+L(g.sales)+'</td>'+
       '<td class="r '+pc(p)+'">'+p+'%</td>'+
       '<td class="r">'+L(abv)+'</td>'+
       '<td class="r">'+conv+'%</td>'+
       '<td class="r">'+g.stores+'</td></tr>';
-  }).join('')||nd(7);
+  }).join('')||nd(7,'No data');
 
   // CM table
   var cmAgg={};
   fStores.forEach(function(s){
-    if(!cmAgg[s.cm])cmAgg[s.cm]={name:s.cm,rm:s.rm,sales:0,tgt:0,bills:0,walks:0,stores:0};
-    cmAgg[s.cm].sales+=getStoreSales(s);cmAgg[s.cm].tgt+=getStoreTgt(s);
-    cmAgg[s.cm].bills+=s.ytdBills;cmAgg[s.cm].walks+=s.ytdWalkIns;cmAgg[s.cm].stores++;
+    var k=s.cm||'Unknown';
+    if(!cmAgg[k])cmAgg[k]={name:k,rm:s.rm||'',sales:0,tgt:0,bills:0,walks:0,stores:0};
+    cmAgg[k].sales+=storeSales(s);cmAgg[k].tgt+=storeTgt(s);
+    cmAgg[k].bills+=(s.ytdBills||0);cmAgg[k].walks+=(s.ytdWalkIns||0);cmAgg[k].stores++;
   });
   document.getElementById('b-ytd-cm').innerHTML=Object.values(cmAgg).sort(function(a,b){return b.sales-a.sales;}).map(function(g){
-    var p=g.tgt?Math.round(g.sales/g.tgt*100):0;
-    var abv=g.bills?Math.round(g.sales/g.bills):0;
-    var conv=g.walks?Math.round(g.bills/g.walks*1000)/10:0;
-    return'<tr><td style="font-weight:700;color:var(--primary);">'+g.name+'</td>'+
-      '<td class="r" style="color:var(--text2);">'+g.rm+'</td>'+
+    var p=g.tgt>0?Math.round(g.sales/g.tgt*100):0;
+    var abv=g.bills>0?Math.round(g.sales/g.bills):0;
+    var conv=g.walks>0?Math.round(g.bills/g.walks*1000)/10:0;
+    return'<tr>'+
+      '<td style="font-weight:700;color:var(--primary);">'+g.name+'</td>'+
+      '<td style="color:var(--text2);font-size:11px;">'+g.rm+'</td>'+
       '<td class="r">'+L(g.tgt)+'</td>'+
       '<td class="r" style="font-weight:700;">'+L(g.sales)+'</td>'+
       '<td class="r '+pc(p)+'">'+p+'%</td>'+
       '<td class="r">'+L(abv)+'</td>'+
       '<td class="r">'+conv+'%</td>'+
       '<td class="r">'+g.stores+'</td></tr>';
-  }).join('')||nd(8);
+  }).join('')||nd(8,'No data');
 
-  // Store YTD table
+  // Store table
   document.getElementById('b-ytd-store').innerHTML=fStores.map(function(s){
-    var ss2=getStoreSales(s),tt=getStoreTgt(s);
-    var p=tt?Math.round(ss2/tt*100):0;
-    var safeCode=s.code.replace(/'/g,'');
-    return'<tr style="cursor:pointer;" onclick="openDrill(\'' + safeCode + '\')">'+
-      '<td style="font-weight:700;color:var(--primary);">'+s.code+'</td>'+
-      '<td style="font-size:11px;">'+s.rm+'</td>'+
-      '<td style="font-size:11px;">'+s.cm+'</td>'+
+    var ss2=storeSales(s),tt=storeTgt(s);
+    var p=tt>0?Math.round(ss2/tt*100):0;
+        var code=(s.code||'').replace(/['"]/g,'');
+    var tr2=document.createElement('tr');
+    tr2.style.cursor='pointer';
+    tr2.title='Click for store popup';
+    tr2.setAttribute('onclick',"openDrill('"+code+"')");
+    tr2.innerHTML=
+      '<td style="font-weight:700;color:var(--primary);">'+code+'</td>'+
+      '<td style="font-size:11px;color:var(--text2);">'+s.rm+'</td>'+
+      '<td style="font-size:11px;color:var(--text2);">'+s.cm+'</td>'+
       '<td class="r">'+L(tt)+'</td>'+
       '<td class="r" style="font-weight:700;">'+L(ss2)+'</td>'+
       '<td class="r '+pc(p)+'">'+p+'%</td>'+
       '<td class="r">'+L(s.abv||0)+'</td>'+
       '<td class="r">'+(s.convActual||0)+'%</td>'+
-      '<td class="r">'+R2(s.upt)+'</td>'+
-    '</tr>';
-  }).join('')||nd(9);
+      '<td class="r">'+R2(s.upt)+'</td>';
+    return tr2.outerHTML;
+  }).join('')||nd(9,'No data');
 
-  // Month-wise breakdown table (dynamic columns per month)
-  var mMonths=qMonths?months.filter(function(m){return qMonths.indexOf(m)!==-1;}):months;
+  // Month-wise breakdown
   var mWrap=document.getElementById('ytd-monthly-wrap');
-  if(mWrap&&mMonths.length){
-    var tbl='<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--surface2);">'+
-      '<th style="padding:7px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:10px;color:var(--text2);text-transform:uppercase;">Store</th>'+
-      '<th style="padding:7px 10px;text-align:left;border-bottom:2px solid var(--border);font-size:10px;color:var(--text2);">RM</th>'+
-      mMonths.map(function(m){return'<th style="padding:7px 10px;text-align:right;border-bottom:2px solid var(--border);font-size:10px;color:var(--text2);text-transform:uppercase;min-width:80px;">'+m+'</th>';}).join('')+
-      '<th style="padding:7px 12px;text-align:right;border-bottom:2px solid var(--border);font-size:10px;color:var(--primary);background:var(--primary-bg);">YTD TOTAL</th>'+
-    '</tr></thead><tbody>'+
-    fStores.slice(0,50).map(function(s){
-      var rowTotal=mMonths.reduce(function(a,m){return a+(s.monthlyData&&s.monthlyData[m]?s.monthlyData[m].sales:0);},0);
-      return'<tr>'+
-        '<td style="padding:6px 12px;font-weight:700;color:var(--primary);border-bottom:1px solid var(--border);">'+s.code+'</td>'+
-        '<td style="padding:6px 10px;font-size:11px;color:var(--text2);border-bottom:1px solid var(--border);">'+s.rm+'</td>'+
-        mMonths.map(function(m){
-          var md=s.monthlyData&&s.monthlyData[m];
-          var v=md?md.sales:0;
-          var p=md&&md.target?Math.round(md.sales/md.target*100):null;
-          return'<td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:11px;border-bottom:1px solid var(--border);color:'+(v>0?p>=100?'var(--green)':p>=85?'var(--amber)':'var(--red)':'var(--text3)')+';font-weight:'+(v>0?'600':'400')+';">'+(v>0?L(v):'—')+'</td>';
+  if(mWrap&&dispMonths.length){
+    var colW=Math.max(70, Math.floor(500/dispMonths.length))+'px';
+    var tbl='<table style="width:100%;border-collapse:collapse;font-size:12px;">'+
+      '<thead><tr style="background:var(--surface2);">'+
+        '<th style="padding:7px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:10px;color:var(--text2);text-transform:uppercase;position:sticky;left:0;background:var(--surface2);">Store</th>'+
+        '<th style="padding:7px 10px;text-align:left;border-bottom:2px solid var(--border);font-size:10px;color:var(--text2);min-width:80px;">RM</th>'+
+        dispMonths.map(function(m){
+          return'<th style="padding:7px 10px;text-align:right;border-bottom:2px solid var(--border);font-size:10px;color:var(--text2);text-transform:uppercase;min-width:'+colW+';">'+m+'</th>';
         }).join('')+
-        '<td style="padding:6px 12px;text-align:right;font-weight:800;font-family:monospace;border-bottom:1px solid var(--border);background:var(--primary-bg);color:var(--primary);">'+L(rowTotal)+'</td>'+
-      '</tr>';
-    }).join('')+'</tbody></table>';
-    mWrap.innerHTML=tbl;
+        '<th style="padding:7px 12px;text-align:right;border-bottom:2px solid var(--border);font-size:10px;color:var(--primary);background:var(--primary-bg);min-width:90px;">TOTAL</th>'+
+      '</tr></thead><tbody>'+
+      fStores.slice(0,50).map(function(s){
+        var rowTotal=dispMonths.reduce(function(a,m){return a+(s.monthlyData&&s.monthlyData[m]?s.monthlyData[m].sales||0:0);},0);
+        return'<tr>'+
+          '<td style="padding:6px 12px;font-weight:700;color:var(--primary);border-bottom:1px solid var(--border);position:sticky;left:0;background:var(--surface);">'+s.code+'</td>'+
+          '<td style="padding:6px 10px;font-size:11px;color:var(--text2);border-bottom:1px solid var(--border);">'+s.rm+'</td>'+
+          dispMonths.map(function(m){
+            var md=s.monthlyData&&s.monthlyData[m];
+            var v=md?(md.sales||0):0;
+            var p=md&&md.target>0?Math.round(md.sales/md.target*100):null;
+            var col=v>0?(p>=100?'var(--green)':p>=85?'var(--amber)':'var(--red)'):'var(--text3)';
+            return'<td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:11px;border-bottom:1px solid var(--border);color:'+col+';font-weight:'+(v>0?'600':'400')+';">'+(v>0?L(v):'—')+'</td>';
+          }).join('')+
+          '<td style="padding:6px 12px;text-align:right;font-weight:800;font-family:monospace;border-bottom:1px solid var(--border);background:var(--primary-bg);color:var(--primary);">'+L(rowTotal)+'</td>'+
+        '</tr>';
+      }).join('')+
+      '</tbody></table>';
+    mWrap.innerHTML='<div style="overflow-x:auto;">'+tbl+'</div>';
+  } else if(mWrap){
+    mWrap.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);">No month data for selected quarter</div>';
   }
 }
 
