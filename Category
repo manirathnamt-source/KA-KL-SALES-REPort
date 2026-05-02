@@ -1,0 +1,412 @@
+// ════════════════════════════════════════════════════════════
+//  KA & KL CATEGORY SCRIPT — Google Apps Script
+//
+//  Reads from TWO sheets:
+//  Sheet1 (Item-wise): 1DqZGDqAgmY68imlF89vcG_K9Au_0qC-kUPPwH-e4CEM
+//    Col D (4)  = SalesMan ID (numeric emp ID e.g. 1679)
+//    Col E (5)  = Bill No (e.g. AB921) ← JOIN KEY with Category Master
+//    Col G (7)  = Outlet Name (e.g. BLR - JAYNAGAR)
+//    Col K (11) = Sold Qty
+//    Col N (14) = Item Net Amount
+//    Col U (21) = Bill Remarks (PURPOSE/SOURCE e.g. GIFTING/DIRECT WALKINS)
+//
+//  Sheet2 (Category Master): 1A0pvLv4UFIAx5cN2pZ4_x4KVFbLe5BT1Rafugq9ERJE
+//    Col A (1)  = Date
+//    Col B (2)  = Bill No (SAME as Sheet1 col E) ← JOIN KEY
+//    Col I (9)  = Store Full Name
+//    Col J (10) = Primary Occasion (Bridal, Celebration, Everyday)
+//    Col K (11) = Main Category (Antique Jewellery, CZ Jewellery etc)
+//    Col L (12) = Product Type (NECKLACESET, EARRING, BANGLES etc)
+//    Col U (21) = Net Sold Qty
+//    Col W (23) = Net GMV (sales amount)
+//    Employee table at bottom: Emp ID | Store Name | Names
+//
+//  JOIN: Sheet1.BillNo = Sheet2.BillNo (both use AB921, DP754 format)
+//        → Gets salesman name, purpose, source per bill
+//
+//  HOW TO DEPLOY:
+//  1. Open script.google.com → New project
+//  2. Paste this entire code
+//  3. Run buildSummaryCache() ONCE manually (wait 2-3 min)
+//  4. Deploy → Web app → Execute as: Me | Anyone
+//  5. Copy /exec URL → paste in Category URL bar in dashboard
+// ════════════════════════════════════════════════════════════
+
+var SHEET1_ID  = '1DqZGDqAgmY68imlF89vcG_K9Au_0qC-kUPPwH-e4CEM';
+var SHEET2_ID  = '1A0pvLv4UFIAx5cN2pZ4_x4KVFbLe5BT1Rafugq9ERJE';
+var CACHE_NAME = 'DASHBOARD_CACHE';
+
+function doGet(e){
+  var p=e&&e.parameter?e.parameter:{},cb=p.callback||'';
+  var result;
+  try{
+    if(p.action==='ping')       result={ok:true,ts:Date.now()};
+    else if(p.action==='build'){buildSummaryCache();result={ok:true,message:'Cache rebuilt'};}
+    else                        result=readCache();
+  }catch(err){result={error:err.toString()};}
+  var json=JSON.stringify(result);
+  if(cb) return ContentService.createTextOutput(cb+'('+json+')').setMimeType(ContentService.MimeType.JAVASCRIPT);
+  return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
+}
+
+function readCache(){
+  var ss=SpreadsheetApp.openById(SHEET2_ID);
+  var cache=ss.getSheetByName(CACHE_NAME);
+  if(!cache) return{error:'Cache not built. Select buildSummaryCache and click Run.',needsBuild:true};
+  var data=cache.getDataRange().getValues();
+  if(!data||data.length<2) return{error:'Cache empty. Run buildSummaryCache() again.'};
+  var meta={};try{meta=JSON.parse(String(data[0][0]));}catch(e){}
+  var out={
+    summary:meta.summary||{},rows:meta.rows||0,crossTabCats:meta.crossTabCats||[],
+    categories:[],subCategories:{},storeDetails:{},
+    salespersons:[],occasions:[],productTypes:[],sources:[],dateTrend:[],crossTab:[]
+  };
+  var section='';
+  for(var i=1;i<data.length;i++){
+    var cell=String(data[i][0]||'');
+    if(cell.match(/^##\w+##$/)){section=cell.replace(/##/g,'').toLowerCase();continue;}
+    if(!cell)continue;
+    try{
+      var obj=JSON.parse(cell);
+      if     (section==='categories')    out.categories.push(obj);
+      else if(section==='subcategories'){if(!out.subCategories[obj.cat])out.subCategories[obj.cat]=[];out.subCategories[obj.cat].push(obj);}
+      else if(section==='storedetails')  out.storeDetails[obj.store]=obj;
+      else if(section==='salespersons')  out.salespersons.push(obj);
+      else if(section==='occasions')     out.occasions.push(obj);
+      else if(section==='producttypes')  out.productTypes.push(obj);
+      else if(section==='sources')       out.sources.push(obj);
+      else if(section==='datetrend')     out.dateTrend.push(obj);
+      else if(section==='crosstab')      out.crossTab.push(obj);
+    }catch(e){}
+  }
+  return out;
+}
+
+function buildSummaryCache(){
+  var t0=Date.now();
+  Logger.log('=== BUILD START ===');
+
+  // ── STEP 1: Load employee lookup from Sheet2 embedded table ──
+  // Table: Emp ID | Store Name | Names  (4-5 digit emp IDs only)
+  var ss2=SpreadsheetApp.openById(SHEET2_ID);
+  var empMap={};  // empId → {name, store}
+  var allSheets2=ss2.getSheets();
+  for(var si=0;si<allSheets2.length;si++){
+    var sh=allSheets2[si];
+    var sdata=sh.getDataRange().getValues();
+    for(var ri=0;ri<sdata.length;ri++){
+      var c0=String(sdata[ri][0]||'').trim();
+      var c2=String(sdata[ri][2]||'').trim();
+      if((c0==='Emp ID'||c0.toLowerCase()==='emp id')&&c2.toLowerCase().indexOf('name')!==-1){
+        Logger.log('Employee table in "'+sh.getName()+'" row '+ri);
+        for(var ei=ri+1;ei<sdata.length;ei++){
+          var eid=String(sdata[ei][0]||'').trim();
+          var estore=String(sdata[ei][1]||'').trim();
+          var ename=String(sdata[ei][2]||'').trim();
+          // Only accept 4-5 digit employee IDs
+          if(eid.match(/^\d{4,5}$/)&&ename&&ename!==':-:')
+            empMap[eid]={name:ename,store:estore};
+        }
+        break;
+      }
+    }
+    if(Object.keys(empMap).length>0)break;
+  }
+  Logger.log('Employees loaded: '+Object.keys(empMap).length);
+  Logger.log('Sample: '+Object.entries(empMap).slice(0,3).map(function(e){return e[0]+'→'+e[1].name;}).join(', '));
+
+  // ── STEP 2: Read Sheet1 ──
+  // Build: billNo → {empId, empName, purpose, source}
+  // Col D(4)=EmpID, Col E(5)=BillNo, Col G(7)=Store, Col K(11)=Qty, Col N(14)=Amt, Col U(21)=Remarks
+  var ss1=SpreadsheetApp.openById(SHEET1_ID);
+  var raw1=ss1.getSheets()[0];
+  var lastRow1=raw1.getLastRow();
+  Logger.log('Sheet1 rows: '+lastRow1);
+
+  var billMap={};   // billNo → {empId, name, purpose, source, store}
+  var storeSpSheet1={};  // store → {empId → {sales,bills}} for fallback
+
+  var BATCH=5000;
+  for(var start=2;start<=lastRow1;start+=BATCH){
+    var end=Math.min(start+BATCH-1,lastRow1);
+    var nRows=end-start+1;
+    // Read cols A-U (21 cols) to get empID(D), billNo(E), store(G), qty(K), amt(N), remarks(U)
+    var B1=raw1.getRange(start,1,nRows,21).getValues();
+
+    for(var j=0;j<B1.length;j++){
+      var r1=B1[j];
+      var empId   = String(r1[3]||'').trim();   // col D (idx 3) = SalesMan ID
+      var billNo  = String(r1[4]||'').trim();   // col E (idx 4) = Bill No
+      var store1  = String(r1[6]||'').trim();   // col G (idx 6) = Outlet Name
+      var qty1    = num(r1[10]);                // col K (idx 10) = Sold Qty
+      var amt1    = num(r1[13]);                // col N (idx 13) = Net Amt
+      var remarks = String(r1[20]||'').trim();  // col U (idx 20) = Bill Remarks
+
+      if(!empId.match(/^\d{4,5}$/)&&!billNo) continue;
+      if(store1.toUpperCase().indexOf('WAREHOUSE')!==-1) continue;
+
+      // Parse Purpose/Source from remarks
+      var purpose='UNKNOWN', source='UNKNOWN';
+      if(remarks&&remarks.length>2){
+        var slash=remarks.indexOf('/');
+        if(slash>0){
+          purpose=clean(remarks.slice(0,slash));
+          source =clean(remarks.slice(slash+1));
+        } else {
+          purpose=clean(remarks);
+        }
+      }
+
+      // Store bill mapping
+      if(billNo&&!billMap[billNo]){
+        var empInfo=empMap[empId]||null;
+        billMap[billNo]={
+          empId:   empId,
+          name:    empInfo?empInfo.name:(empId?'EMP-'+empId:'Unknown'),
+          store:   store1,
+          purpose: purpose||'UNKNOWN',
+          source:  source||'UNKNOWN'
+        };
+      }
+
+      // Also accumulate per-store SP for fallback
+      if(empId.match(/^\d{4,5}$/)&&store1&&amt1>0){
+        if(!storeSpSheet1[store1])storeSpSheet1[store1]={};
+        if(!storeSpSheet1[store1][empId])storeSpSheet1[store1][empId]={sales:0,bills:0};
+        storeSpSheet1[store1][empId].sales+=amt1;
+        storeSpSheet1[store1][empId].bills++;
+      }
+    }
+    Logger.log('Sheet1 row '+end+' | '+ms(t0));
+  }
+
+  Logger.log('Bill map: '+Object.keys(billMap).length+' bills | SP stores: '+Object.keys(storeSpSheet1).length);
+  // Show sample bill mappings
+  var sampleBills=Object.entries(billMap).slice(0,5).map(function(e){return e[0]+'→'+e[1].name+'/'+e[1].source;});
+  Logger.log('Sample bills: '+sampleBills.join(' | '));
+
+  // ── STEP 3: Read Sheet2 (Category Master) ──
+  var raw2=ss2.getSheets()[0];
+  var lastRow2=raw2.getLastRow();
+  Logger.log('Sheet2 rows: '+lastRow2);
+
+  var mainCatMap={},subCatMap={},storeMap={},stDet={};
+  var occMap={},ptMap={},srcMap={},spMapReg={};
+  var dateMap={},scMap={};
+  var totSales=0,totQty=0,totBills=0;
+
+  for(var start2=2;start2<=lastRow2;start2+=BATCH){
+    var end2=Math.min(start2+BATCH-1,lastRow2);
+    var nRows2=end2-start2+1;
+    var B2=raw2.getRange(start2,1,nRows2,25).getValues();
+
+    for(var j2=0;j2<B2.length;j2++){
+      var row=B2[j2];
+      var netAmt=num(row[22]);  // col W (idx 22) = Net GMV
+      var netQty=num(row[20]);  // col U (idx 20) = Net Sold Qty
+      if(netAmt<=0&&netQty<=0)continue;
+
+      var billNo2  =String(row[1]||'').trim();  // col B (idx 1) = Bill No
+      var storeName=String(row[8]||'').trim();  // col I (idx 8) = Store Full Name
+      var storeCode=String(row[7]||'').trim();  // col H (idx 7) = Store Code
+      var occasion =String(row[9]||'').trim()||'UNKNOWN';  // col J = Primary Occasion
+      var mainCat  =String(row[10]||'').trim()||'Other';   // col K = Main Category
+      var prodType =String(row[11]||'').trim()||'Other';   // col L = Product Type
+      var dateVal  =row[0];
+      var dateStr  =dateVal instanceof Date?fmt(dateVal):String(dateVal||'').substr(0,10);
+
+      if(storeName.toUpperCase().indexOf('WAREHOUSE')!==-1)continue;
+
+      // Lookup via bill number (primary join)
+      var binfo=billMap[billNo2]||null;
+      var spName=binfo?binfo.name:'Unknown';
+      var purpose=binfo?binfo.purpose:occasion;  // fallback: use occasion as purpose
+      var source =binfo?binfo.source:'UNKNOWN';
+
+      totSales+=netAmt;totQty+=netQty;totBills++;
+
+      // Aggregate main category
+      if(!mainCatMap[mainCat])mainCatMap[mainCat]={name:mainCat,sales:0,qty:0,bills:0,stores:{},pts:{}};
+      mainCatMap[mainCat].sales+=netAmt;mainCatMap[mainCat].qty+=netQty;mainCatMap[mainCat].bills++;
+      mainCatMap[mainCat].stores[storeName]=(mainCatMap[mainCat].stores[storeName]||0)+netAmt;
+      mainCatMap[mainCat].pts[prodType]=(mainCatMap[mainCat].pts[prodType]||0)+netAmt;
+
+      // Sub-category
+      var subKey=mainCat+'||'+prodType;
+      if(!subCatMap[subKey])subCatMap[subKey]={cat:mainCat,name:prodType,sales:0,qty:0,bills:0};
+      subCatMap[subKey].sales+=netAmt;subCatMap[subKey].qty+=netQty;subCatMap[subKey].bills++;
+
+      // Store (category view)
+      if(!storeMap[storeName])storeMap[storeName]={name:storeName,code:storeCode,sales:0,qty:0,bills:0,cats:{}};
+      storeMap[storeName].sales+=netAmt;storeMap[storeName].qty+=netQty;storeMap[storeName].bills++;
+      storeMap[storeName].cats[mainCat]=(storeMap[storeName].cats[mainCat]||0)+netAmt;
+      scMap[storeName+'|'+mainCat]=(scMap[storeName+'|'+mainCat]||0)+netAmt;
+
+      // Store detail (for popup)
+      if(!stDet[storeName])stDet[storeName]={store:storeName,code:storeCode,total:0,cat:{},subCat:{},occasion:{},prodType:{},source:{},sp:{}};
+      var sd=stDet[storeName];sd.total+=netAmt;
+      sd.cat[mainCat]=(sd.cat[mainCat]||0)+netAmt;
+      sd.subCat[mainCat+'›'+prodType]=(sd.subCat[mainCat+'›'+prodType]||0)+netAmt;
+      sd.occasion[occasion]=(sd.occasion[occasion]||0)+netAmt;
+      sd.prodType[prodType]=(sd.prodType[prodType]||0)+netAmt;
+      sd.source[source]=(sd.source[source]||0)+netAmt;
+      sd.sp[spName]=(sd.sp[spName]||0)+netAmt;
+
+      // Region-wide occasions
+      if(!occMap[occasion])occMap[occasion]={name:occasion,sales:0,qty:0,bills:0};
+      occMap[occasion].sales+=netAmt;occMap[occasion].qty+=netQty;occMap[occasion].bills++;
+
+      // Region-wide product types
+      if(!ptMap[prodType])ptMap[prodType]={name:prodType,mainCat:mainCat,sales:0,qty:0,bills:0};
+      ptMap[prodType].sales+=netAmt;ptMap[prodType].qty+=netQty;ptMap[prodType].bills++;
+
+      // Region-wide sources
+      if(!srcMap[source])srcMap[source]={name:source,sales:0,qty:0,bills:0};
+      srcMap[source].sales+=netAmt;srcMap[source].qty+=netQty;srcMap[source].bills++;
+
+      // Region-wide salespersons
+      var spKey=(binfo?binfo.empId:'')||spName;
+      if(!spMapReg[spKey])spMapReg[spKey]={name:spName,id:binfo?binfo.empId:'',store:binfo?binfo.store:storeName,sales:0,bills:0};
+      spMapReg[spKey].sales+=netAmt;spMapReg[spKey].bills++;
+
+      // Date trend
+      if(dateStr){if(!dateMap[dateStr])dateMap[dateStr]={date:dateStr,sales:0,qty:0,bills:0};dateMap[dateStr].sales+=netAmt;dateMap[dateStr].qty+=netQty;dateMap[dateStr].bills++;}
+    }
+    Logger.log('Sheet2 row '+end2+' | '+ms(t0));
+  }
+
+  // ── STEP 4: Handle stores where bill join found no SP data ──
+  // Fallback: use Sheet1 store→emp map proportionally
+  var matchedSPCount=0,fallbackCount=0;
+  Object.keys(stDet).forEach(function(storeName){
+    var sd=stDet[storeName];
+    var spTotal=Object.values(sd.sp).reduce(function(a,v){return a+v;},0);
+    var unknownSales=sd.sp['Unknown']||0;
+
+    // If more than 70% is "Unknown", try fallback
+    if(unknownSales>spTotal*0.7){
+      var sh1SPs=storeSpSheet1[storeName];
+      if(!sh1SPs){
+        // Try partial match
+        var keys1=Object.keys(storeSpSheet1);
+        for(var ki=0;ki<keys1.length;ki++){
+          if(keys1[ki].toUpperCase().substr(0,10)===storeName.toUpperCase().substr(0,10)){
+            sh1SPs=storeSpSheet1[keys1[ki]];break;
+          }
+        }
+      }
+      if(sh1SPs){
+        // Distribute unknown sales proportionally
+        var sh1Total=Object.values(sh1SPs).reduce(function(a,v){return a+v.sales;},0);
+        if(sh1Total>0){
+          delete sd.sp['Unknown'];
+          Object.keys(sh1SPs).forEach(function(empId){
+            var empInfo=empMap[empId]||{name:'EMP-'+empId};
+            var ratio=sh1SPs[empId].sales/sh1Total;
+            var spSales=Math.round(unknownSales*ratio);
+            if(spSales>0) sd.sp[empInfo.name]=(sd.sp[empInfo.name]||0)+spSales;
+          });
+          fallbackCount++;
+        }
+      }
+    } else {
+      matchedSPCount++;
+    }
+  });
+  Logger.log('SP match: '+matchedSPCount+' direct, '+fallbackCount+' fallback');
+
+  // ── STEP 5: Format & write cache ──
+  var categories=desc(mainCatMap,'sales').map(function(c){
+    return{name:c.name,sales:R(c.sales),qty:R(c.qty),bills:c.bills,
+           abv:c.bills?R(c.sales/c.bills):0,salePct:totSales?pct(c.sales,totSales):0,
+           topStore:topK(c.stores),topProducts:sortE(c.pts).slice(0,5).map(function(e){return{name:e[0],sales:R(e[1])};})};
+  });
+
+  var subCategories=Object.values(subCatMap).map(function(s){
+    return{cat:s.cat,name:s.name,sales:R(s.sales),qty:R(s.qty),bills:s.bills,
+           abv:s.bills?R(s.sales/s.bills):0,salePct:totSales?pct(s.sales,totSales):0};
+  }).sort(function(a,b){return b.sales-a.sales;});
+
+  var stores=desc(storeMap,'sales').map(function(s){
+    return{name:s.name,code:s.code,sales:R(s.sales),qty:R(s.qty),bills:s.bills,
+           abv:s.bills?R(s.sales/s.bills):0,
+           topCats:sortE(s.cats).slice(0,3).map(function(e){return{name:e[0],sales:R(e[1])};})};
+  });
+
+  var storeDetails=Object.values(stDet).map(function(sd){
+    function ta(map,total){return sortE(map).map(function(e){return{name:e[0],sales:R(e[1]),pct:total?pct(e[1],total):0};});}
+    return{store:sd.store,code:sd.code,totalSales:R(sd.total),
+           categories:ta(sd.cat,sd.total),subCategories:ta(sd.subCat,sd.total),
+           occasions:ta(sd.occasion,sd.total),productTypes:ta(sd.prodType,sd.total),
+           sources:ta(sd.source,sd.total),salespersons:ta(sd.sp,sd.total)};
+  });
+
+  var salespersons=desc(spMapReg,'sales').map(function(s){
+    return{id:s.id,name:s.name,store:s.store,sales:R(s.sales),bills:s.bills,
+           abv:s.bills?R(s.sales/s.bills):0,salePct:totSales?pct(s.sales,totSales):0};
+  });
+
+  var occasions=desc(occMap,'sales').map(function(o){return{name:o.name,sales:R(o.sales),qty:R(o.qty),bills:o.bills,pct:totSales?pct(o.sales,totSales):0};});
+  var productTypes=desc(ptMap,'sales').map(function(p){return{name:p.name,mainCat:p.mainCat,sales:R(p.sales),qty:R(p.qty),bills:p.bills,abv:p.bills?R(p.sales/p.bills):0,pct:totSales?pct(p.sales,totSales):0};});
+  var sources=desc(srcMap,'sales').map(function(s){return{name:s.name,sales:R(s.sales),qty:R(s.qty)||0,bills:s.bills||0,pct:totSales?pct(s.sales,totSales):0};});
+  var dateTrend=Object.values(dateMap).sort(function(a,b){return a.date.localeCompare(b.date);});
+  var topCatNames=categories.slice(0,8).map(function(c){return c.name;});
+  var crossTab=stores.slice(0,15).map(function(s){
+    var row={store:s.name,total:s.sales};
+    topCatNames.forEach(function(cat){row[cat]=R(scMap[s.name+'|'+cat]||0);});
+    return row;
+  });
+
+  var cs=ss2.getSheetByName(CACHE_NAME)||ss2.insertSheet(CACHE_NAME);
+  cs.clearContents();
+  var rows=[[JSON.stringify({
+    summary:{totalSales:R(totSales),totalQty:R(totQty),totalBills:totBills,
+             totalStores:stores.length,totalCats:categories.length,
+             totalSalespersons:salespersons.length,
+             hasEmpLookup:Object.keys(empMap).length>0,
+             billMatchRate:Object.keys(billMap).length,
+             abv:totBills?R(totSales/totBills):0,
+             fetchedAt:fmt(new Date()),builtMs:Date.now()-t0},
+    rows:totBills,crossTabCats:topCatNames
+  })]];
+
+  function ws(n,a){rows.push(['##'+n+'##']);a.forEach(function(o){rows.push([JSON.stringify(o)]);});}
+  ws('CATEGORIES',   categories);
+  ws('SUBCATEGORIES',subCategories);
+  ws('STORES',       stores);
+  ws('STOREDETAILS', storeDetails);
+  ws('SALESPERSONS', salespersons);
+  ws('OCCASIONS',    occasions);
+  ws('PRODUCTTYPES', productTypes);
+  ws('SOURCES',      sources);
+  ws('DATETREND',    dateTrend);
+  ws('CROSSTAB',     crossTab);
+  cs.getRange(1,1,rows.length,1).setValues(rows);
+
+  Logger.log('=== DONE '+ms(t0)+' | Bills:'+totBills+' | BillMap:'+Object.keys(billMap).length+' | SPs:'+salespersons.length+' ===');
+  Logger.log('Top SPs: '+salespersons.slice(0,5).map(function(s){return s.name+'('+R(s.sales/1000)+'K)';}).join(', '));
+  Logger.log('Occasions: '+occasions.map(function(o){return o.name+'('+o.bills+')';}).join(', '));
+  Logger.log('Sources: '+sources.map(function(s){return s.name+'('+s.bills+')';}).join(', '));
+}
+
+// ── Helpers ──
+function clean(s){
+  if(!s)return'';s=String(s).toUpperCase().trim();
+  if(!s||s.length<2)return'';
+  // Skip bill-number-like strings
+  if(s.match(/^[A-Z]{2,3}\d{2,6}(\/\d{2}-\d{2})?$/))return'';
+  if(s==='REFERAL')return'REFERRAL';
+  if(s==='DIRECT WALKIN'||s==='WALKINS')return'DIRECT WALKINS';
+  if(s==='ONLINE ADS'||s==='ONLINE AD')return'ONLINE ADS';
+  return s.length>30?s.substr(0,30):s;
+}
+function tr(v){return String(v||'').trim();}
+function num(v){if(!v&&v!==0)return 0;if(typeof v==='number')return isNaN(v)?0:v;return parseFloat(String(v).replace(/[^0-9.-]/g,''))||0;}
+function R(n){return Math.round(n);}
+function fmt(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function pad(n){return n<10?'0'+n:''+n;}
+function pct(a,b){return Math.round(a/b*1000)/10;}
+function desc(map,key){return Object.values(map).sort(function(a,b){return b[key]-a[key];});}
+function sortE(obj){return Object.entries(obj).sort(function(a,b){return b[1]-a[1];});}
+function topK(obj){var t=sortE(obj)[0];return t?t[0]:'';}
+function ms(t0){return Math.round((Date.now()-t0)/1000)+'s';}
