@@ -1,725 +1,291 @@
-// ============================================================// ============================================================
-//  KA & KL Store Dashboard — Apps Script FINAL (Real-time)
+// ════════════════════════════════════════════════════════════
+//  KA & KL MAIN KPI SCRIPT
+//  Sheet: 1Wp_0upauCVviyhw8ZM9XFVbIMRDgEYBZykh1_rjk0S8
 //
-//  HOW REAL-TIME SYNC WORKS:
-//  1. doGet() reads FRESH data from sheet every single call
-//  2. No time-driven trigger needed — delete any you have
-//  3. No caching — we add ?t= timestamp to bust CDN cache
-//  4. Dashboard polls every 60s — data appears within 1 min
+//  SHEET LAYOUT (same for all months):
+//  Row 1: Title row
+//  Row 2: Blank / totals info
+//  Row 3: Header row: S.No | STORE NAME | RM | CM | Target | ... | Apr-1 | | | | Apr-2 | ...
+//  Row 4: Sub-header: Sales | Conv | ABV | Walk-ins | UPT | SALES(₹) | BILLS | SOLD QTY | WALK INS | ...
+//  Row 5+: Store data rows
 //
-//  NO onEdit trigger needed — polling is the correct approach
-// ============================================================
+//  Col layout (1-indexed):
+//  1=S.No, 2=Store Name, 3=RM, 4=CM, 5=Sales Target, 6=Conv Target
+//  7=ABV Target, 8=Walk-ins Target, 9=UPT Target
+//  Then groups of 4 per day: SALES | BILLS | SOLD QTY | WALK INS
+//  Day 1 starts at col 10, Day 2 at col 14, Day N at col 10+(N-1)*4
+//  MTD Summary at end (after last day)
+//
+//  DEPLOY: Apps Script → Deploy → Web App → Anyone
+// ════════════════════════════════════════════════════════════
 
-var SPREADSHEET_ID = '1Wp_0upauCVviyhw8ZM9XFVbIMRDgEYBZykh1_rjk0S8';
-var SECRET_KEY     = '4NJqtPi77ctO3Ec5acEenwwa17XHEFhT';
+var SHEET_ID = '1Wp_0upauCVviyhw8ZM9XFVbIMRDgEYBZykh1_rjk0S8';
+var MONTH_ORDER = ['APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB','MAR'];
+var MONTH_DAYS  = {APR:30,MAY:31,JUN:30,JUL:31,AUG:31,SEP:30,OCT:31,NOV:30,DEC:31,JAN:31,FEB:28,MAR:31};
+var MONTH_ABBR  = {APR:'Apr',MAY:'May',JUN:'Jun',JUL:'Jul',AUG:'Aug',SEP:'Sep',OCT:'Oct',NOV:'Nov',DEC:'Dec',JAN:'Jan',FEB:'Feb',MAR:'Mar'};
 
-var PROPS    = PropertiesService.getScriptProperties();
-var USER_KEY = 'active_users';
-var USER_TTL = 5 * 60 * 1000; // 5 min
+// FY starts April — quarter mapping
+var QUARTER_MAP = {APR:'Q1',MAY:'Q1',JUN:'Q1',JUL:'Q2',AUG:'Q2',SEP:'Q2',OCT:'Q3',NOV:'Q3',DEC:'Q3',JAN:'Q4',FEB:'Q4',MAR:'Q4'};
 
-var MONTH_DAYS = {
-  APR:30,MAY:31,JUN:30,JUL:31,AUG:31,
-  SEP:30,OCT:31,NOV:30,DEC:31,JAN:31,FEB:28,MAR:31
-};
-var MONTH_NAMES_MAP = {
-  'APRIL':'APR','APR':'APR','MAY':'MAY','JUNE':'JUN','JUN':'JUN',
-  'JULY':'JUL','JUL':'JUL','AUGUST':'AUG','AUG':'AUG',
-  'SEPTEMBER':'SEP','SEP':'SEP','OCTOBER':'OCT','OCT':'OCT',
-  'NOVEMBER':'NOV','NOV':'NOV','DECEMBER':'DEC','DEC':'DEC',
-  'JANUARY':'JAN','JAN':'JAN','FEBRUARY':'FEB','FEB':'FEB',
-  'MARCH':'MAR','MAR':'MAR'
-};
-
-// ══════════════════════════════════════════════════════════
-//  doGet — Entry point. Runs FRESH every call. No caching.
-// ══════════════════════════════════════════════════════════
-function doGet(e) {
-  var p        = (e && e.parameter) ? e.parameter : {};
-  var sheet    = p.sheet    || 'APR';
-  var callback = p.callback || '';
-  var action   = p.action   || 'data';
-  var userId   = p.userId   || '';
-  var userName = p.userName || '';
-  // p.t is a timestamp added by dashboard to bust CDN cache — we ignore it
-
-  // ── API key check ──
-  if (p.key !== SECRET_KEY) {
-    var denied = JSON.stringify({ error: 'Unauthorized' });
-    if (callback) return ContentService.createTextOutput(callback+'('+denied+')').setMimeType(ContentService.MimeType.JAVASCRIPT);
-    return ContentService.createTextOutput(denied).setMimeType(ContentService.MimeType.JSON);
-  }
-
+function doGet(e){
+  var p=e&&e.parameter?e.parameter:{}, cb=p.callback||'';
   var result;
-  try {
-    // openById reads your live sheet directly — always fresh
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-
-    if (action === 'heartbeat') {
-      updatePresence(userId, userName);
-      result = { users: getActiveUsers(), ts: Date.now() };
-
-    } else if (action === 'leave') {
-      removeUser(userId);
-      result = { ok: true };
-
-    } else if (action === 'ping') {
-      // Lightweight check — no sheet read, just confirms script is alive
-      result = { ok: true, ts: Date.now(), sheet: sheet };
-
-    } else if (action === 'debug_targets') {
-      var kt0 = loadKPITargets(ss, sheet);
-      result  = { totalStores: Object.keys(kt0).length, kpiSample: objSlice(kt0, 5) };
-
-    } else {
-      // ── Main data fetch — always reads live sheet ──
-      if (userId) updatePresence(userId, userName);
-      var ws = ss.getSheetByName(sheet);
-      if (!ws) {
-        var names = ss.getSheets().map(function(s){ return s.getName(); });
-        result = { error: 'Sheet "'+sheet+'" not found. Available: '+names.join(', ') };
-      } else {
-        var kpiTargets = loadKPITargets(ss, sheet);
-        result = parseSheet(ws, sheet, kpiTargets);
-        result.activeUsers = getActiveUsers();
-        result.fetchedAt   = Utilities.formatDate(
-          new Date(), Session.getScriptTimeZone(), 'dd-MMM-yyyy HH:mm:ss'
-        );
-      }
-    }
-  } catch(err) {
-    result = { error: err.toString() };
-  }
-
-  var json = JSON.stringify(result);
-
-  // Return with JAVASCRIPT mime type for JSONP
-  // Google does NOT cache JAVASCRIPT responses the same way — this helps avoid stale data
-  if (callback) {
-    return ContentService
-      .createTextOutput(callback + '(' + json + ')')
-      .setMimeType(ContentService.MimeType.JAVASCRIPT);
-  }
-  return ContentService
-    .createTextOutput(json)
-    .setMimeType(ContentService.MimeType.JSON);
+  try{
+    var action=p.action||'monthly';
+    if(action==='ytd')         result=getYTD(p.upToMonth);
+    else if(action==='monthly') result=getMonthly(p.sheet||'APR');
+    else                        result=getMonthly(p.sheet||'APR');
+  }catch(err){result={error:err.toString()};}
+  var json=JSON.stringify(result);
+  if(cb) return ContentService.createTextOutput(cb+'('+json+')').setMimeType(ContentService.MimeType.JAVASCRIPT);
+  return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
 }
 
-// ══════════════════════════════════════════════════════════
-//  DELETE any time-driven triggers you have!
-//  This function helps you clean them up — run it once manually
-// ══════════════════════════════════════════════════════════
-function deleteAllTriggers() {
-  var triggers = ScriptApp.getProjectTriggers();
-  triggers.forEach(function(t) { ScriptApp.deleteTrigger(t); });
-  Logger.log('Deleted ' + triggers.length + ' trigger(s). Real-time polling handles sync now.');
-}
-
-// ══════════════════════════════════════════════════════════
-//  KPI TARGETS — reads STORE TARGETS sheet
-// ══════════════════════════════════════════════════════════
-function loadKPITargets(ss, sheetName) {
-  var targets = {};
-  try {
-    var ts = ss.getSheetByName('STORE TARGETS');
-    if (!ts) return targets;
-    var lastRow = Math.min(ts.getLastRow(), 65);
-    var lastCol = Math.min(ts.getLastColumn(), 30);
-    if (lastRow < 3 || lastCol < 5) return targets;
-
-    var rows = ts.getRange(1, 1, lastRow, lastCol).getValues();
-    var sheetUp = sheetName.toUpperCase();
-
-    var monthStartCol = -1, kpiHeaderRow = -1;
-    for (var i = 0; i < Math.min(8, rows.length); i++) {
-      for (var c = 4; c < rows[i].length; c++) {
-        var cv = String(rows[i][c]||'').trim().toUpperCase().replace(/\s+/g,'');
-        if (MONTH_NAMES_MAP[cv] === sheetUp) {
-          monthStartCol = c;
-          for (var j = i+1; j < Math.min(i+4, rows.length); j++) {
-            var jt = rows[j].slice(c, Math.min(c+8, rows[j].length))
-                            .map(function(v){return String(v||'').toUpperCase();}).join('|');
-            if (jt.indexOf('SALES')!==-1||jt.indexOf('BILL')!==-1){kpiHeaderRow=j;break;}
-          }
-          break;
-        }
-      }
-      if (monthStartCol >= 0) break;
-    }
-    if (kpiHeaderRow === -1) {
-      for (var i2 = 0; i2 < Math.min(8, rows.length); i2++) {
-        var rt = rows[i2].slice(0,Math.min(20,rows[i2].length))
-                         .map(function(v){return String(v||'').toUpperCase();}).join('|');
-        if (rt.indexOf('SALES')!==-1&&(rt.indexOf('BILL')!==-1||rt.indexOf('CONV')!==-1)){
-          kpiHeaderRow=i2;
-          if (monthStartCol===-1) for(var c2=4;c2<rows[i2].length;c2++){if(String(rows[i2][c2]||'').toUpperCase().indexOf('SALES')!==-1){monthStartCol=c2;break;}}
-          break;
-        }
-      }
-    }
-    if (monthStartCol===-1){var ORD=['APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB','MAR'];var mi=ORD.indexOf(sheetUp);monthStartCol=(mi>=0)?4+mi*6:4;}
-    if (kpiHeaderRow===-1) kpiHeaderRow=3;
-
-    var colMap={sales:-1,bills:-1,conversion:-1,abv:-1,walkIns:-1,upt:-1};
-    if (kpiHeaderRow<rows.length){
-      var hRow=rows[kpiHeaderRow],sf=Math.max(4,monthStartCol-1),st=Math.min(sf+10,hRow.length);
-      for(var c3=sf;c3<st;c3++){
-        var h=String(hRow[c3]||'').replace(/[\s\n]/g,'').toUpperCase();
-        if((h.indexOf('SALES')!==-1||h.indexOf('REVENUE')!==-1)&&colMap.sales===-1) colMap.sales=c3;
-        else if(h.indexOf('BILL')!==-1&&colMap.bills===-1) colMap.bills=c3;
-        else if(h.indexOf('CONV')!==-1&&colMap.conversion===-1) colMap.conversion=c3;
-        else if((h.indexOf('ABV')!==-1||h.indexOf('ATV')!==-1)&&colMap.abv===-1) colMap.abv=c3;
-        else if((h.indexOf('WALK')!==-1||h.indexOf('FOOT')!==-1)&&colMap.walkIns===-1) colMap.walkIns=c3;
-        else if((h.indexOf('UPT')!==-1||h.indexOf('UNIT')!==-1)&&colMap.upt===-1) colMap.upt=c3;
-      }
-    }
-    if (colMap.sales===-1) colMap.sales=monthStartCol;
-
-    var SKIP=['TOTAL','SUMMARY','GRAND','REGION','★','STORE NAME','S.NO'];
-    for(var r=kpiHeaderRow+1;r<rows.length;r++){
-      var row2=rows[r];if(!row2||!row2[1])continue;
-      var name=String(row2[1]).trim();if(name.length<3)continue;
-      if(SKIP.some(function(s){return name.toUpperCase().indexOf(s)!==-1;}))continue;
-      if(!name.match(/\([A-Z]{3}[A-Z0-9]+\)/))continue;
-      var codeM=name.match(/\(([A-Z0-9]+)\)/);
-      var code=codeM?codeM[1]:name.substring(0,8).toUpperCase().replace(/\s/g,'');
-      var convRaw=colMap.conversion>=0?parseNum(row2[colMap.conversion]):0;
-      var convVal=(convRaw>0&&convRaw<1)?Math.round(convRaw*1000)/10:convRaw;
-      targets[code]={
-        sales:   colMap.sales>=0   ?parseNum(row2[colMap.sales])  :0,
-        bills:   colMap.bills>=0   ?parseNum(row2[colMap.bills])  :0,
-        conversion: convVal,
-        abv:     colMap.abv>=0     ?parseNum(row2[colMap.abv])    :0,
-        walkIns: colMap.walkIns>=0 ?parseNum(row2[colMap.walkIns]):0,
-        upt:     colMap.upt>=0     ?parseNum(row2[colMap.upt])    :0
-      };
-    }
-  } catch(err){Logger.log('loadKPITargets: '+err);}
-  return targets;
-}
-
-// ══════════════════════════════════════════════════════════
-//  PARSE SHEET — reads live day-wise data
-// ══════════════════════════════════════════════════════════
-function parseSheet(ws, sheetName, kpiTargets) {
-  var lastRow=ws.getLastRow(), lastCol=ws.getLastColumn();
-  if(lastRow<4||lastCol<6) return{stores:[],sheet:sheetName,dayLabels:[],daysCount:0,totalDaysInMonth:30};
-
-  var hdr=ws.getRange(1,1,Math.min(5,lastRow),Math.min(lastCol,140)).getValues();
-  var row3=hdr[2]||[], row4=hdr[3]||[];
-
-  // Find SALES columns (exclude MTD summary)
-  var salesCols=[];
-  for(var c=5;c<row4.length;c++){
-    var ft=String(row4[c]||'').replace(/\s/g,'').toUpperCase();
-    var lt=String(row3[c]||'').replace(/\s/g,'').toUpperCase();
-    if(ft.indexOf('SALES')!==-1&&lt.indexOf('MTD')===-1&&lt.indexOf('SUMMARY')===-1&&lt.indexOf('TOTAL')===-1)
-      salesCols.push(c);
-  }
-  if(salesCols.length===0){
-    for(var c2=5;c2<row3.length;c2+=4){
-      var v3=String(row3[c2]||'').replace(/\s/g,'').toUpperCase();
-      if(v3&&v3.indexOf('MTD')===-1&&v3.indexOf('SUMMARY')===-1)salesCols.push(c2);
+// ── Monthly data (existing behaviour) ──
+function getMonthly(monthName){
+  var ss=SpreadsheetApp.openById(SHEET_ID);
+  // Find sheet by name (case-insensitive)
+  var sheet=null;
+  var sheets=ss.getSheets();
+  for(var i=0;i<sheets.length;i++){
+    if(sheets[i].getName().toUpperCase()===monthName.toUpperCase()){
+      sheet=sheets[i];break;
     }
   }
+  if(!sheet) return{error:'Sheet "'+monthName+'" not found. Sheets: '+sheets.map(function(s){return s.getName();}).join(', ')};
 
-  var sheetUp=sheetName.toUpperCase();
-  var knownDays=MONTH_DAYS[sheetUp]||30;
-  var totalDaysInMonth=Math.min(salesCols.length,knownDays);
-  var dayLabels=salesCols.slice(0,totalDaysInMonth).map(function(sc,i){
-    return String(row3[sc]||'').trim()||(sheetName+'-'+(i+1));
-  });
+  var data=sheet.getDataRange().getValues();
+  if(data.length<5) return{error:'Sheet has too few rows'};
 
-  // ── Trending cutoff = today - 1 ──
-  // Data is entered by stores throughout the day and syncs live.
-  // We use today's data IF any store has entered it (todayHasData check).
-  // Otherwise fall back to yesterday.
-  var todayDay=new Date().getDate();
-  var todayIdx=todayDay-1; // 0-based index for today (Apr-15 = index 14)
-
-  // Read store data rows
-  var dataRows=ws.getRange(5,1,Math.min(lastRow-4,56),Math.min(lastCol,134)).getValues();
-
-  // Check if ANY store has entered data for today
-  var todayHasData=false;
-  if(todayIdx<totalDaysInMonth && todayIdx<salesCols.length){
-    var todayCol=salesCols[todayIdx];
-    for(var ri=0;ri<dataRows.length;ri++){
-      if(todayCol<dataRows[ri].length&&parseNum(dataRows[ri][todayCol])>0){
-        todayHasData=true; break;
+  // Find the header rows
+  // Row index 2 (0-based) = S.No | STORE NAME | RM | CM | Target | ... | Apr-1 | ...
+  // Row index 3 (0-based) = Sales | Conv | ABV | Walk-ins | UPT | SALES(₹) | BILLS | SOLD QTY | WALK INS | ...
+  // Find which row has "S.No" or "STORE NAME"
+  var headerRowIdx=-1, subHeaderRowIdx=-1, firstDataRowIdx=-1;
+  for(var r=0;r<Math.min(data.length,10);r++){
+    var cell0=String(data[r][0]||'').trim().toLowerCase();
+    var cell1=String(data[r][1]||'').trim().toLowerCase();
+    if(cell0==='s.no'||cell1.indexOf('store name')!==-1||cell1.indexOf('store')!==-1){
+      headerRowIdx=r;
+      subHeaderRowIdx=r+1;
+      firstDataRowIdx=r+2;
+      break;
+    }
+  }
+  if(headerRowIdx<0){
+    // Fallback: look for row with "Apr-" or "May-" day labels
+    for(var r2=0;r2<Math.min(data.length,8);r2++){
+      var rowStr=data[r2].join('|').toLowerCase();
+      if(rowStr.indexOf('apr-')+rowStr.indexOf('may-')+rowStr.indexOf('jun-')>-3){
+        headerRowIdx=r2;subHeaderRowIdx=r2+1;firstDataRowIdx=r2+2;break;
       }
     }
   }
+  if(headerRowIdx<0) return{error:'Could not find header row. Check sheet structure.'};
 
-  // cutoff = today if any store entered today's data, else yesterday
-  var cutoff = todayHasData ? todayIdx : todayIdx - 1;
-  cutoff = Math.max(0, Math.min(cutoff, totalDaysInMonth-1));
+  var headerRow=data[headerRowIdx];
+  var today=new Date();
+  var totalDays=MONTH_DAYS[monthName.toUpperCase()]||30;
 
-  // Find last active day up to cutoff
-  var lastIdx=-1;
-  for(var di=0;di<=cutoff;di++){
-    var sc=salesCols[di],dayTot=0;
-    for(var ri2=0;ri2<dataRows.length;ri2++){
-      if(sc<dataRows[ri2].length)dayTot+=parseNum(dataRows[ri2][sc]);
+  // Find day columns by looking for "Mon-N" patterns in header row
+  // Each day group = [SALES, BILLS, SOLD QTY, WALK INS]
+  var dayLabels=[];
+  var dayStartCols=[]; // 0-based col index where each day's SALES column is
+
+  for(var c=0;c<headerRow.length;c++){
+    var h=String(headerRow[c]||'').trim();
+    // Match "Apr-1", "Apr-2", "May-1" etc
+    if(h.match(/^[A-Za-z]{3}-\d{1,2}$/)){
+      dayLabels.push(h);
+      dayStartCols.push(c);
     }
-    if(dayTot>0)lastIdx=di;
   }
-  if(lastIdx===-1)lastIdx=Math.max(0,cutoff);
 
-  var activeCols=salesCols.slice(0,lastIdx+1);
-  var activeDayLabels=dayLabels.slice(0,lastIdx+1);
-  var lastSalesCol=salesCols[lastIdx]||salesCols[0]||5;
-  var daysElapsed=activeCols.length;
-  var daysLeft=Math.max(0,totalDaysInMonth-daysElapsed);
+  // If no day labels found, try to parse from target area
+  // Col 5 = Sales Target (idx 4), then col 10 = Day 1 (idx 9)
+  if(dayLabels.length===0){
+    Logger.log('No day labels found in header. Using fixed layout: day 1 at col 10 (idx 9)');
+    var startCol=9; // 0-based index of Apr-1 SALES column
+    var mabbr=MONTH_ABBR[monthName.toUpperCase()]||monthName;
+    for(var d=1;d<=totalDays;d++){
+      dayLabels.push(mabbr+'-'+d);
+      dayStartCols.push(startCol+(d-1)*4);
+    }
+  }
 
-  var SKIP=['TOTAL','SUMMARY','GRAND','REGION','★'];
+  Logger.log('Month: '+monthName+' | Days found: '+dayLabels.length+' | Day cols: '+dayStartCols.slice(0,3).join(','));
+
+  // Find today's elapsed days
+  var elapsed=dayLabels.length; // use actual data days available
+  var remaining=Math.max(0,totalDays-elapsed);
+
+  // Parse stores
   var stores=[];
+  for(var r3=firstDataRowIdx;r3<data.length;r3++){
+    var row=data[r3];
+    var sno=String(row[0]||'').trim();
+    var storeFull=String(row[1]||'').trim();
+    if(!storeFull||storeFull.toUpperCase().indexOf('WAREHOUSE')!==-1||sno==='S.No'||sno==='') continue;
+    if(!sno||isNaN(parseInt(sno))) continue; // skip non-data rows
 
-  for(var row=0;row<dataRows.length;row++){
-    var r=dataRows[row];
-    if(!r||!r[1])continue;
-    var name=String(r[1]).trim();
-    if(name.length<3||name.toUpperCase().indexOf('STORE NAME')!==-1)continue;
-    if(SKIP.some(function(s){return name.toUpperCase().indexOf(s)!==-1;}))continue;
+    // Extract store code from name like "BLR - JAYNAGAR (BLRJAY)"
+    var code=storeFull;
+    var codeMatch=storeFull.match(/\(([A-Z0-9]{4,8})\)$/);
+    if(codeMatch) code=codeMatch[1];
 
-    var rm=String(r[2]||'').trim(),cm=String(r[3]||'').trim(),target=parseNum(r[4]);
-    var ms=0,mb=0,mq=0,mw=0,daySales=[];
+    var rm   =String(row[2]||'').trim();
+    var cm   =String(row[3]||'').trim();
 
-    for(var d=0;d<activeCols.length;d++){
-      var col=activeCols[d];
-      var sv=col<r.length?parseNum(r[col]):0;
-      var bv=col+1<r.length?parseNum(r[col+1]):0;
-      var qv=col+2<r.length?parseNum(r[col+2]):0;
-      var wv=col+3<r.length?parseNum(r[col+3]):0;
-      daySales.push(sv);ms+=sv;mb+=bv;mq+=qv;mw+=wv;
+    // Targets at cols 5-9 (idx 4-8)
+    var tgtSales  =num(row[4]);
+    var tgtConv   =parseFloat(String(row[5]||'').replace(/[^0-9.]/g,''))||0; // "53%"
+    var tgtABV    =num(row[6]);
+    var tgtWalkIns=num(row[7]);
+    var tgtUPT    =parseFloat(String(row[8]||'').replace(/[^0-9.]/g,''))||0;
+    var tgtBills  =Math.round(tgtWalkIns*(tgtConv/100));
+
+    // Day-wise data
+    var daySales=[], dayBills=[], dayWalkIns=[], dayQty=[];
+    for(var di=0;di<dayStartCols.length;di++){
+      var c2=dayStartCols[di];
+      daySales.push(num(row[c2]));
+      dayBills.push(num(row[c2+1]));
+      dayQty.push(num(row[c2+2]));
+      dayWalkIns.push(num(row[c2+3]));
     }
 
-    var todaySales=lastSalesCol<r.length?parseNum(r[lastSalesCol]):0;
-    var todayBills=lastSalesCol+1<r.length?parseNum(r[lastSalesCol+1]):0;
-    var todayWalk =lastSalesCol+3<r.length?parseNum(r[lastSalesCol+3]):0;
-    var pct =target>0?Math.round(ms/target*100):0;
-    var abv =mb>0?Math.round(ms/mb):0;
-    var upt =mb>0?Math.round(mq/mb*100)/100:0;
-    var conv=mw>0?Math.round(mb/mw*1000)/10:0;
+    // MTD calculations
+    var mtdSales=sum(daySales), mtdBills=sum(dayBills), mtdQty=sum(dayQty), mtdWalkIns=sum(dayWalkIns);
+    var daysWithData=daySales.filter(function(v){return v>0;}).length;
+    if(daysWithData===0) daysWithData=1;
 
-    var codeM=name.match(/\(([A-Z0-9]+)\)/);
-    var code=codeM?codeM[1]:name.substring(0,8).toUpperCase().replace(/\s/g,'');
-    var cityM=code.match(/^([A-Z]{3})/);
-    var city=cityM?cityM[1]:'?';
-    var kt=kpiTargets[code]||{sales:0,bills:0,conversion:0,abv:0,walkIns:0,upt:0};
-    var salesTgt=kt.sales||target;
+    var projTotal=Math.round(mtdSales/daysWithData*totalDays);
+    var pct=tgtSales?Math.round(mtdSales/tgtSales*100):0;
+    var trendingPct=tgtSales?Math.round(projTotal/tgtSales*100):0;
+    var convActual=mtdWalkIns>0?Math.round(mtdBills/mtdWalkIns*1000)/10:0;
+    var abv=mtdBills>0?Math.round(mtdSales/mtdBills):0;
+    var upt=mtdBills>0?Math.round(mtdQty/mtdBills*100)/100:0;
 
-    function proj(a){return daysElapsed>0?Math.round(a+(a/daysElapsed)*daysLeft):a;}
-    function kpiT(a,t){if(!t)return null;var p=proj(a),pc=Math.round(p/t*100);return{actual:Math.round(a*100)/100,projected:p,target:t,pct:pc,status:pc>=100?'green':'red'};}
-    function rateT(a,t){if(!t)return null;var pc=Math.round(a/t*100);return{actual:Math.round(a*100)/100,projected:Math.round(a*100)/100,target:t,pct:pc,status:pc>=100?'green':'red'};}
-
-    var projTotal=proj(ms);
-    var trendPct=salesTgt>0?Math.round(projTotal/salesTgt*100):0;
-
-    if(target>0||ms>0){
-      stores.push({
-        name:name,code:code,city:city,rm:rm,cm:cm,
-        target:Math.round(salesTgt),mtdSales:Math.round(ms),mtdBills:Math.round(mb),
-        mtdSoldQty:Math.round(mq),mtdWalkIns:Math.round(mw),
-        todaySales:Math.round(todaySales),todayBills:Math.round(todayBills),todayWalkIns:Math.round(todayWalk),
-        pct:pct,abv:abv,upt:upt,convActual:conv,
-        projectedTotal:projTotal,trendingPct:trendPct,
-        trendStatus:trendPct>=100?'on-track':trendPct>=85?'at-risk':'behind',
-        daysCount:daysElapsed,daySales:daySales,
-        todayHasData:todayHasData,
-        kpiTargets:{sales:Math.round(salesTgt),bills:Math.round(kt.bills||0),conversion:kt.conversion||0,abv:Math.round(kt.abv||0),walkIns:Math.round(kt.walkIns||0),upt:kt.upt||0},
-        kpiTrending:{
-          sales:kpiT(ms,salesTgt),bills:kpiT(mb,kt.bills),
-          walkIns:kpiT(mw,kt.walkIns),conversion:rateT(conv,kt.conversion),
-          abv:rateT(abv,kt.abv),upt:rateT(upt,kt.upt)
-        }
-      });
-    }
+    stores.push({
+      code:code, name:storeFull, rm:rm, cm:cm,
+      target:tgtSales, mtdSales:mtdSales, projectedTotal:projTotal,
+      pct:pct, trendingPct:trendingPct,
+      mtdBills:mtdBills, mtdWalkIns:mtdWalkIns, mtdSoldQty:mtdQty,
+      convActual:convActual, abv:abv, upt:upt,
+      todaySales:daySales[daysWithData-1]||0,
+      daysCount:daysWithData,
+      daySales:daySales, dayBills:dayBills,
+      kpiTargets:{
+        sales:tgtSales, bills:tgtBills, walkIns:tgtWalkIns,
+        conversion:tgtConv, abv:tgtABV, upt:tgtUPT
+      },
+      kpiTrending:{
+        walkIns:{pct:tgtWalkIns?Math.round(mtdWalkIns/tgtWalkIns*100):null}
+      }
+    });
   }
 
-  var allSheets=SpreadsheetApp.openById(SPREADSHEET_ID).getSheets().map(function(s){return s.getName();});
+  Logger.log('Stores parsed: '+stores.length+' | days: '+dayLabels.length);
   return{
-    stores:stores,sheet:sheetName,sheets:allSheets,
-    dayLabels:activeDayLabels,daysCount:daysElapsed,
-    totalDaysInMonth:totalDaysInMonth,cutoffDay:cutoff,
-    todayHasData:todayHasData,
-    fetchedAt:Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'dd-MMM-yyyy HH:mm:ss')
+    stores:stores,
+    dayLabels:dayLabels,
+    totalDaysInMonth:totalDays,
+    elapsed:daysWithData||elapsed,
+    remaining:remaining,
+    sheets:getAvailableSheets(ss),
+    month:monthName,
+    generatedAt:new Date().toISOString()
   };
 }
 
-// ══════════════════════════════════════════════════════════
-//  Run this ONCE manually to remove old time-driven triggers
-// ══════════════════════════════════════════════════════════
-function deleteAllTriggers(){
-  var t=ScriptApp.getProjectTriggers();
-  t.forEach(function(x){ScriptApp.deleteTrigger(x);});
-  Logger.log('Removed '+t.length+' trigger(s).');
-}
+// ── YTD data — reads all months from APR to upToMonth ──
+function getYTD(upToMonth){
+  upToMonth=(upToMonth||'APR').toUpperCase();
+  var ss=SpreadsheetApp.openById(SHEET_ID);
 
-// ── Helpers ──
-function parseNum(val){if(val===null||val===undefined||val==='')return 0;if(typeof val==='number')return isNaN(val)?0:val;var s=String(val).replace(/[₹,%\s]/g,'').replace(/[^0-9.-]/g,'');return parseFloat(s)||0;}
-function objSlice(obj,n){var o={},i=0;for(var k in obj){if(i++>=n)break;o[k]=obj[k];}return o;}
-function updatePresence(u,n){if(!u)return;var d={};try{d=JSON.parse(PROPS.getProperty(USER_KEY)||'{}');}catch(e){}d[u]={name:n||u,ts:Date.now()};PROPS.setProperty(USER_KEY,JSON.stringify(d));}
-function removeUser(u){if(!u)return;var d={};try{d=JSON.parse(PROPS.getProperty(USER_KEY)||'{}');}catch(e){}delete d[u];PROPS.setProperty(USER_KEY,JSON.stringify(d));}
-function getActiveUsers(){var d={};try{d=JSON.parse(PROPS.getProperty(USER_KEY)||'{}');}catch(e){return[];}var now=Date.now(),a=[],ch=false;Object.keys(d).forEach(function(id){if(now-d[id].ts<USER_TTL)a.push({id:id,name:d[id].name,ts:d[id].ts});else{delete d[id];ch=true;}});if(ch)PROPS.setProperty(USER_KEY,JSON.stringify(d));a.sort(function(a,b){return b.ts-a.ts;});return a;}
-//  KA & KL Store Dashboard — Apps Script FINAL (Real-time)
-//
-//  HOW REAL-TIME SYNC WORKS:
-//  1. doGet() reads FRESH data from sheet every single call
-//  2. No time-driven trigger needed — delete any you have
-//  3. No caching — we add ?t= timestamp to bust CDN cache
-//  4. Dashboard polls every 60s — data appears within 1 min
-//
-//  NO onEdit trigger needed — polling is the correct approach
-// ============================================================
+  // Determine which months to include (APR = start of FY)
+  var upToIdx=MONTH_ORDER.indexOf(upToMonth);
+  if(upToIdx<0) upToIdx=0;
+  var monthsToRead=MONTH_ORDER.slice(0,upToIdx+1);
 
-var SPREADSHEET_ID = '1Wp_0upauCVviyhw8ZM9XFVbIMRDgEYBZykh1_rjk0S8';
-var SECRET_KEY     = '4NJqtPi77ctO3Ec5acEenwwa17XHEFhT';
+  Logger.log('YTD: reading months '+monthsToRead.join(', '));
 
-var PROPS    = PropertiesService.getScriptProperties();
-var USER_KEY = 'active_users';
-var USER_TTL = 5 * 60 * 1000; // 5 min
+  // Read each month and aggregate per store
+  var storeAgg={}; // code → {name,rm,cm,sales:{},targets:{},bills:{},walkIns:{},qty:{}}
 
-var MONTH_DAYS = {
-  APR:30,MAY:31,JUN:30,JUL:31,AUG:31,
-  SEP:30,OCT:31,NOV:30,DEC:31,JAN:31,FEB:28,MAR:31
-};
-var MONTH_NAMES_MAP = {
-  'APRIL':'APR','APR':'APR','MAY':'MAY','JUNE':'JUN','JUN':'JUN',
-  'JULY':'JUL','JUL':'JUL','AUGUST':'AUG','AUG':'AUG',
-  'SEPTEMBER':'SEP','SEP':'SEP','OCTOBER':'OCT','OCT':'OCT',
-  'NOVEMBER':'NOV','NOV':'NOV','DECEMBER':'DEC','DEC':'DEC',
-  'JANUARY':'JAN','JAN':'JAN','FEBRUARY':'FEB','FEB':'FEB',
-  'MARCH':'MAR','MAR':'MAR'
-};
-
-// ══════════════════════════════════════════════════════════
-//  doGet — Entry point. Runs FRESH every call. No caching.
-// ══════════════════════════════════════════════════════════
-function doGet(e) {
-  var p        = (e && e.parameter) ? e.parameter : {};
-  var sheet    = p.sheet    || 'APR';
-  var callback = p.callback || '';
-  var action   = p.action   || 'data';
-  var userId   = p.userId   || '';
-  var userName = p.userName || '';
-  // p.t is a timestamp added by dashboard to bust CDN cache — we ignore it
-
-  // ── API key check ──
-  if (p.key !== SECRET_KEY) {
-    var denied = JSON.stringify({ error: 'Unauthorized' });
-    if (callback) return ContentService.createTextOutput(callback+'('+denied+')').setMimeType(ContentService.MimeType.JAVASCRIPT);
-    return ContentService.createTextOutput(denied).setMimeType(ContentService.MimeType.JSON);
-  }
-
-  var result;
-  try {
-    // openById reads your live sheet directly — always fresh
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-
-    if (action === 'heartbeat') {
-      updatePresence(userId, userName);
-      result = { users: getActiveUsers(), ts: Date.now() };
-
-    } else if (action === 'leave') {
-      removeUser(userId);
-      result = { ok: true };
-
-    } else if (action === 'ping') {
-      // Lightweight check — no sheet read, just confirms script is alive
-      result = { ok: true, ts: Date.now(), sheet: sheet };
-
-    } else if (action === 'debug_targets') {
-      var kt0 = loadKPITargets(ss, sheet);
-      result  = { totalStores: Object.keys(kt0).length, kpiSample: objSlice(kt0, 5) };
-
-    } else {
-      // ── Main data fetch — always reads live sheet ──
-      if (userId) updatePresence(userId, userName);
-      var ws = ss.getSheetByName(sheet);
-      if (!ws) {
-        var names = ss.getSheets().map(function(s){ return s.getName(); });
-        result = { error: 'Sheet "'+sheet+'" not found. Available: '+names.join(', ') };
-      } else {
-        var kpiTargets = loadKPITargets(ss, sheet);
-        result = parseSheet(ws, sheet, kpiTargets);
-        result.activeUsers = getActiveUsers();
-        result.fetchedAt   = Utilities.formatDate(
-          new Date(), Session.getScriptTimeZone(), 'dd-MMM-yyyy HH:mm:ss'
-        );
-      }
-    }
-  } catch(err) {
-    result = { error: err.toString() };
-  }
-
-  var json = JSON.stringify(result);
-
-  // Return with JAVASCRIPT mime type for JSONP
-  // Google does NOT cache JAVASCRIPT responses the same way — this helps avoid stale data
-  if (callback) {
-    return ContentService
-      .createTextOutput(callback + '(' + json + ')')
-      .setMimeType(ContentService.MimeType.JAVASCRIPT);
-  }
-  return ContentService
-    .createTextOutput(json)
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-// ══════════════════════════════════════════════════════════
-//  DELETE any time-driven triggers you have!
-//  This function helps you clean them up — run it once manually
-// ══════════════════════════════════════════════════════════
-function deleteAllTriggers() {
-  var triggers = ScriptApp.getProjectTriggers();
-  triggers.forEach(function(t) { ScriptApp.deleteTrigger(t); });
-  Logger.log('Deleted ' + triggers.length + ' trigger(s). Real-time polling handles sync now.');
-}
-
-// ══════════════════════════════════════════════════════════
-//  KPI TARGETS — reads STORE TARGETS sheet
-// ══════════════════════════════════════════════════════════
-function loadKPITargets(ss, sheetName) {
-  var targets = {};
-  try {
-    var ts = ss.getSheetByName('STORE TARGETS');
-    if (!ts) return targets;
-    var lastRow = Math.min(ts.getLastRow(), 65);
-    var lastCol = Math.min(ts.getLastColumn(), 30);
-    if (lastRow < 3 || lastCol < 5) return targets;
-
-    var rows = ts.getRange(1, 1, lastRow, lastCol).getValues();
-    var sheetUp = sheetName.toUpperCase();
-
-    var monthStartCol = -1, kpiHeaderRow = -1;
-    for (var i = 0; i < Math.min(8, rows.length); i++) {
-      for (var c = 4; c < rows[i].length; c++) {
-        var cv = String(rows[i][c]||'').trim().toUpperCase().replace(/\s+/g,'');
-        if (MONTH_NAMES_MAP[cv] === sheetUp) {
-          monthStartCol = c;
-          for (var j = i+1; j < Math.min(i+4, rows.length); j++) {
-            var jt = rows[j].slice(c, Math.min(c+8, rows[j].length))
-                            .map(function(v){return String(v||'').toUpperCase();}).join('|');
-            if (jt.indexOf('SALES')!==-1||jt.indexOf('BILL')!==-1){kpiHeaderRow=j;break;}
-          }
-          break;
-        }
-      }
-      if (monthStartCol >= 0) break;
-    }
-    if (kpiHeaderRow === -1) {
-      for (var i2 = 0; i2 < Math.min(8, rows.length); i2++) {
-        var rt = rows[i2].slice(0,Math.min(20,rows[i2].length))
-                         .map(function(v){return String(v||'').toUpperCase();}).join('|');
-        if (rt.indexOf('SALES')!==-1&&(rt.indexOf('BILL')!==-1||rt.indexOf('CONV')!==-1)){
-          kpiHeaderRow=i2;
-          if (monthStartCol===-1) for(var c2=4;c2<rows[i2].length;c2++){if(String(rows[i2][c2]||'').toUpperCase().indexOf('SALES')!==-1){monthStartCol=c2;break;}}
-          break;
-        }
-      }
-    }
-    if (monthStartCol===-1){var ORD=['APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB','MAR'];var mi=ORD.indexOf(sheetUp);monthStartCol=(mi>=0)?4+mi*6:4;}
-    if (kpiHeaderRow===-1) kpiHeaderRow=3;
-
-    var colMap={sales:-1,bills:-1,conversion:-1,abv:-1,walkIns:-1,upt:-1};
-    if (kpiHeaderRow<rows.length){
-      var hRow=rows[kpiHeaderRow],sf=Math.max(4,monthStartCol-1),st=Math.min(sf+10,hRow.length);
-      for(var c3=sf;c3<st;c3++){
-        var h=String(hRow[c3]||'').replace(/[\s\n]/g,'').toUpperCase();
-        if((h.indexOf('SALES')!==-1||h.indexOf('REVENUE')!==-1)&&colMap.sales===-1) colMap.sales=c3;
-        else if(h.indexOf('BILL')!==-1&&colMap.bills===-1) colMap.bills=c3;
-        else if(h.indexOf('CONV')!==-1&&colMap.conversion===-1) colMap.conversion=c3;
-        else if((h.indexOf('ABV')!==-1||h.indexOf('ATV')!==-1)&&colMap.abv===-1) colMap.abv=c3;
-        else if((h.indexOf('WALK')!==-1||h.indexOf('FOOT')!==-1)&&colMap.walkIns===-1) colMap.walkIns=c3;
-        else if((h.indexOf('UPT')!==-1||h.indexOf('UNIT')!==-1)&&colMap.upt===-1) colMap.upt=c3;
-      }
-    }
-    if (colMap.sales===-1) colMap.sales=monthStartCol;
-
-    var SKIP=['TOTAL','SUMMARY','GRAND','REGION','★','STORE NAME','S.NO'];
-    for(var r=kpiHeaderRow+1;r<rows.length;r++){
-      var row2=rows[r];if(!row2||!row2[1])continue;
-      var name=String(row2[1]).trim();if(name.length<3)continue;
-      if(SKIP.some(function(s){return name.toUpperCase().indexOf(s)!==-1;}))continue;
-      if(!name.match(/\([A-Z]{3}[A-Z0-9]+\)/))continue;
-      var codeM=name.match(/\(([A-Z0-9]+)\)/);
-      var code=codeM?codeM[1]:name.substring(0,8).toUpperCase().replace(/\s/g,'');
-      var convRaw=colMap.conversion>=0?parseNum(row2[colMap.conversion]):0;
-      var convVal=(convRaw>0&&convRaw<1)?Math.round(convRaw*1000)/10:convRaw;
-      targets[code]={
-        sales:   colMap.sales>=0   ?parseNum(row2[colMap.sales])  :0,
-        bills:   colMap.bills>=0   ?parseNum(row2[colMap.bills])  :0,
-        conversion: convVal,
-        abv:     colMap.abv>=0     ?parseNum(row2[colMap.abv])    :0,
-        walkIns: colMap.walkIns>=0 ?parseNum(row2[colMap.walkIns]):0,
-        upt:     colMap.upt>=0     ?parseNum(row2[colMap.upt])    :0
+  monthsToRead.forEach(function(m){
+    var mData=getMonthly(m);
+    if(!mData||mData.error||!mData.stores) return;
+    mData.stores.forEach(function(s){
+      var key=s.code;
+      if(!storeAgg[key])storeAgg[key]={
+        code:s.code,name:s.name,rm:s.rm,cm:s.cm,
+        ytdSales:0,ytdTarget:0,ytdBills:0,ytdWalkIns:0,ytdQty:0,
+        monthlyData:{},targets:{}
       };
-    }
-  } catch(err){Logger.log('loadKPITargets: '+err);}
-  return targets;
-}
-
-// ══════════════════════════════════════════════════════════
-//  PARSE SHEET — reads live day-wise data
-// ══════════════════════════════════════════════════════════
-function parseSheet(ws, sheetName, kpiTargets) {
-  var lastRow=ws.getLastRow(), lastCol=ws.getLastColumn();
-  if(lastRow<4||lastCol<6) return{stores:[],sheet:sheetName,dayLabels:[],daysCount:0,totalDaysInMonth:30};
-
-  var hdr=ws.getRange(1,1,Math.min(5,lastRow),Math.min(lastCol,140)).getValues();
-  var row3=hdr[2]||[], row4=hdr[3]||[];
-
-  // Find SALES columns (exclude MTD summary)
-  var salesCols=[];
-  for(var c=5;c<row4.length;c++){
-    var ft=String(row4[c]||'').replace(/\s/g,'').toUpperCase();
-    var lt=String(row3[c]||'').replace(/\s/g,'').toUpperCase();
-    if(ft.indexOf('SALES')!==-1&&lt.indexOf('MTD')===-1&&lt.indexOf('SUMMARY')===-1&&lt.indexOf('TOTAL')===-1)
-      salesCols.push(c);
-  }
-  if(salesCols.length===0){
-    for(var c2=5;c2<row3.length;c2+=4){
-      var v3=String(row3[c2]||'').replace(/\s/g,'').toUpperCase();
-      if(v3&&v3.indexOf('MTD')===-1&&v3.indexOf('SUMMARY')===-1)salesCols.push(c2);
-    }
-  }
-
-  var sheetUp=sheetName.toUpperCase();
-  var knownDays=MONTH_DAYS[sheetUp]||30;
-  var totalDaysInMonth=Math.min(salesCols.length,knownDays);
-  var dayLabels=salesCols.slice(0,totalDaysInMonth).map(function(sc,i){
-    return String(row3[sc]||'').trim()||(sheetName+'-'+(i+1));
+      var a=storeAgg[key];
+      a.ytdSales  +=s.mtdSales;
+      a.ytdTarget +=s.target||0;
+      a.ytdBills  +=s.mtdBills;
+      a.ytdWalkIns+=s.mtdWalkIns;
+      a.ytdQty    +=s.mtdSoldQty;
+      a.monthlyData[m]={sales:s.mtdSales,target:s.target||0,pct:s.pct,bills:s.mtdBills,walkIns:s.mtdWalkIns};
+      a.targets[m]=s.kpiTargets||{};
+    });
   });
 
-  // ── Trending cutoff = today - 1 ──
-  // Data is entered by stores throughout the day and syncs live.
-  // We use today's data IF any store has entered it (todayHasData check).
-  // Otherwise fall back to yesterday.
-  var todayDay=new Date().getDate();
-  var todayIdx=todayDay-1; // 0-based index for today (Apr-15 = index 14)
+  // Format output
+  var stores=Object.values(storeAgg).map(function(a){
+    var pct=a.ytdTarget?Math.round(a.ytdSales/a.ytdTarget*100):0;
+    var abv=a.ytdBills?Math.round(a.ytdSales/a.ytdBills):0;
+    var upt=a.ytdBills?Math.round(a.ytdQty/a.ytdBills*100)/100:0;
+    var conv=a.ytdWalkIns?Math.round(a.ytdBills/a.ytdWalkIns*1000)/10:0;
+    return{
+      code:a.code,name:a.name,rm:a.rm,cm:a.cm,
+      ytdSales:R(a.ytdSales),ytdTarget:R(a.ytdTarget),
+      ytdBills:R(a.ytdBills),ytdWalkIns:R(a.ytdWalkIns),ytdQty:R(a.ytdQty),
+      pct:pct,abv:abv,upt:upt,convActual:conv,
+      monthlyData:a.monthlyData
+    };
+  }).sort(function(a,b){return b.ytdSales-a.ytdSales;});
 
-  // Read store data rows
-  var dataRows=ws.getRange(5,1,Math.min(lastRow-4,56),Math.min(lastCol,134)).getValues();
+  // RM/CM aggregates
+  var rmAgg={},cmAgg={};
+  stores.forEach(function(s){
+    if(!rmAgg[s.rm])rmAgg[s.rm]={name:s.rm,ytdSales:0,ytdTarget:0,ytdBills:0,ytdWalkIns:0,stores:0};
+    if(!cmAgg[s.cm])cmAgg[s.cm]={name:s.cm,ytdSales:0,ytdTarget:0,ytdBills:0,ytdWalkIns:0,stores:0};
+    rmAgg[s.rm].ytdSales+=s.ytdSales;rmAgg[s.rm].ytdTarget+=s.ytdTarget;rmAgg[s.rm].stores++;
+    cmAgg[s.cm].ytdSales+=s.ytdSales;cmAgg[s.cm].ytdTarget+=s.ytdTarget;cmAgg[s.cm].stores++;
+    rmAgg[s.rm].ytdBills+=s.ytdBills;cmAgg[s.cm].ytdBills+=s.ytdBills;
+    rmAgg[s.rm].ytdWalkIns+=s.ytdWalkIns;cmAgg[s.cm].ytdWalkIns+=s.ytdWalkIns;
+  });
+  ['rmAgg','cmAgg'].forEach(function(key){
+    var obj=key==='rmAgg'?rmAgg:cmAgg;
+    Object.values(obj).forEach(function(g){
+      g.pct=g.ytdTarget?Math.round(g.ytdSales/g.ytdTarget*100):0;
+      g.abv=g.ytdBills?Math.round(g.ytdSales/g.ytdBills):0;
+      g.conv=g.ytdWalkIns?Math.round(g.ytdBills/g.ytdWalkIns*1000)/10:0;
+    });
+  });
 
-  // Check if ANY store has entered data for today
-  var todayHasData=false;
-  if(todayIdx<totalDaysInMonth && todayIdx<salesCols.length){
-    var todayCol=salesCols[todayIdx];
-    for(var ri=0;ri<dataRows.length;ri++){
-      if(todayCol<dataRows[ri].length&&parseNum(dataRows[ri][todayCol])>0){
-        todayHasData=true; break;
-      }
-    }
-  }
-
-  // cutoff = today if any store entered today's data, else yesterday
-  var cutoff = todayHasData ? todayIdx : todayIdx - 1;
-  cutoff = Math.max(0, Math.min(cutoff, totalDaysInMonth-1));
-
-  // Find last active day up to cutoff
-  var lastIdx=-1;
-  for(var di=0;di<=cutoff;di++){
-    var sc=salesCols[di],dayTot=0;
-    for(var ri2=0;ri2<dataRows.length;ri2++){
-      if(sc<dataRows[ri2].length)dayTot+=parseNum(dataRows[ri2][sc]);
-    }
-    if(dayTot>0)lastIdx=di;
-  }
-  if(lastIdx===-1)lastIdx=Math.max(0,cutoff);
-
-  var activeCols=salesCols.slice(0,lastIdx+1);
-  var activeDayLabels=dayLabels.slice(0,lastIdx+1);
-  var lastSalesCol=salesCols[lastIdx]||salesCols[0]||5;
-  var daysElapsed=activeCols.length;
-  var daysLeft=Math.max(0,totalDaysInMonth-daysElapsed);
-
-  var SKIP=['TOTAL','SUMMARY','GRAND','REGION','★'];
-  var stores=[];
-
-  for(var row=0;row<dataRows.length;row++){
-    var r=dataRows[row];
-    if(!r||!r[1])continue;
-    var name=String(r[1]).trim();
-    if(name.length<3||name.toUpperCase().indexOf('STORE NAME')!==-1)continue;
-    if(SKIP.some(function(s){return name.toUpperCase().indexOf(s)!==-1;}))continue;
-
-    var rm=String(r[2]||'').trim(),cm=String(r[3]||'').trim(),target=parseNum(r[4]);
-    var ms=0,mb=0,mq=0,mw=0,daySales=[];
-
-    for(var d=0;d<activeCols.length;d++){
-      var col=activeCols[d];
-      var sv=col<r.length?parseNum(r[col]):0;
-      var bv=col+1<r.length?parseNum(r[col+1]):0;
-      var qv=col+2<r.length?parseNum(r[col+2]):0;
-      var wv=col+3<r.length?parseNum(r[col+3]):0;
-      daySales.push(sv);ms+=sv;mb+=bv;mq+=qv;mw+=wv;
-    }
-
-    var todaySales=lastSalesCol<r.length?parseNum(r[lastSalesCol]):0;
-    var todayBills=lastSalesCol+1<r.length?parseNum(r[lastSalesCol+1]):0;
-    var todayWalk =lastSalesCol+3<r.length?parseNum(r[lastSalesCol+3]):0;
-    var pct =target>0?Math.round(ms/target*100):0;
-    var abv =mb>0?Math.round(ms/mb):0;
-    var upt =mb>0?Math.round(mq/mb*100)/100:0;
-    var conv=mw>0?Math.round(mb/mw*1000)/10:0;
-
-    var codeM=name.match(/\(([A-Z0-9]+)\)/);
-    var code=codeM?codeM[1]:name.substring(0,8).toUpperCase().replace(/\s/g,'');
-    var cityM=code.match(/^([A-Z]{3})/);
-    var city=cityM?cityM[1]:'?';
-    var kt=kpiTargets[code]||{sales:0,bills:0,conversion:0,abv:0,walkIns:0,upt:0};
-    var salesTgt=kt.sales||target;
-
-    function proj(a){return daysElapsed>0?Math.round(a+(a/daysElapsed)*daysLeft):a;}
-    function kpiT(a,t){if(!t)return null;var p=proj(a),pc=Math.round(p/t*100);return{actual:Math.round(a*100)/100,projected:p,target:t,pct:pc,status:pc>=100?'green':'red'};}
-    function rateT(a,t){if(!t)return null;var pc=Math.round(a/t*100);return{actual:Math.round(a*100)/100,projected:Math.round(a*100)/100,target:t,pct:pc,status:pc>=100?'green':'red'};}
-
-    var projTotal=proj(ms);
-    var trendPct=salesTgt>0?Math.round(projTotal/salesTgt*100):0;
-
-    if(target>0||ms>0){
-      stores.push({
-        name:name,code:code,city:city,rm:rm,cm:cm,
-        target:Math.round(salesTgt),mtdSales:Math.round(ms),mtdBills:Math.round(mb),
-        mtdSoldQty:Math.round(mq),mtdWalkIns:Math.round(mw),
-        todaySales:Math.round(todaySales),todayBills:Math.round(todayBills),todayWalkIns:Math.round(todayWalk),
-        pct:pct,abv:abv,upt:upt,convActual:conv,
-        projectedTotal:projTotal,trendingPct:trendPct,
-        trendStatus:trendPct>=100?'on-track':trendPct>=85?'at-risk':'behind',
-        daysCount:daysElapsed,daySales:daySales,
-        todayHasData:todayHasData,
-        kpiTargets:{sales:Math.round(salesTgt),bills:Math.round(kt.bills||0),conversion:kt.conversion||0,abv:Math.round(kt.abv||0),walkIns:Math.round(kt.walkIns||0),upt:kt.upt||0},
-        kpiTrending:{
-          sales:kpiT(ms,salesTgt),bills:kpiT(mb,kt.bills),
-          walkIns:kpiT(mw,kt.walkIns),conversion:rateT(conv,kt.conversion),
-          abv:rateT(abv,kt.abv),upt:rateT(upt,kt.upt)
-        }
-      });
-    }
-  }
-
-  var allSheets=SpreadsheetApp.openById(SPREADSHEET_ID).getSheets().map(function(s){return s.getName();});
+  var quarter=QUARTER_MAP[upToMonth]||'Q1';
   return{
-    stores:stores,sheet:sheetName,sheets:allSheets,
-    dayLabels:activeDayLabels,daysCount:daysElapsed,
-    totalDaysInMonth:totalDaysInMonth,cutoffDay:cutoff,
-    todayHasData:todayHasData,
-    fetchedAt:Utilities.formatDate(new Date(),Session.getScriptTimeZone(),'dd-MMM-yyyy HH:mm:ss')
+    stores:stores,
+    rm:Object.values(rmAgg).sort(function(a,b){return b.ytdSales-a.ytdSales;}),
+    cm:Object.values(cmAgg).sort(function(a,b){return b.ytdSales-a.ytdSales;}),
+    months:monthsToRead,
+    upToMonth:upToMonth,
+    quarter:quarter,
+    generatedAt:new Date().toISOString()
   };
 }
 
-// ══════════════════════════════════════════════════════════
-//  Run this ONCE manually to remove old time-driven triggers
-// ══════════════════════════════════════════════════════════
-function deleteAllTriggers(){
-  var t=ScriptApp.getProjectTriggers();
-  t.forEach(function(x){ScriptApp.deleteTrigger(x);});
-  Logger.log('Removed '+t.length+' trigger(s).');
+function getAvailableSheets(ss){
+  return ss.getSheets()
+    .map(function(s){return s.getName().toUpperCase();})
+    .filter(function(n){return MONTH_ORDER.indexOf(n)!==-1;});
 }
 
-// ── Helpers ──
-function parseNum(val){if(val===null||val===undefined||val==='')return 0;if(typeof val==='number')return isNaN(val)?0:val;var s=String(val).replace(/[₹,%\s]/g,'').replace(/[^0-9.-]/g,'');return parseFloat(s)||0;}
-function objSlice(obj,n){var o={},i=0;for(var k in obj){if(i++>=n)break;o[k]=obj[k];}return o;}
-function updatePresence(u,n){if(!u)return;var d={};try{d=JSON.parse(PROPS.getProperty(USER_KEY)||'{}');}catch(e){}d[u]={name:n||u,ts:Date.now()};PROPS.setProperty(USER_KEY,JSON.stringify(d));}
-function removeUser(u){if(!u)return;var d={};try{d=JSON.parse(PROPS.getProperty(USER_KEY)||'{}');}catch(e){}delete d[u];PROPS.setProperty(USER_KEY,JSON.stringify(d));}
-function getActiveUsers(){var d={};try{d=JSON.parse(PROPS.getProperty(USER_KEY)||'{}');}catch(e){return[];}var now=Date.now(),a=[],ch=false;Object.keys(d).forEach(function(id){if(now-d[id].ts<USER_TTL)a.push({id:id,name:d[id].name,ts:d[id].ts});else{delete d[id];ch=true;}});if(ch)PROPS.setProperty(USER_KEY,JSON.stringify(d));a.sort(function(a,b){return b.ts-a.ts;});return a;}
+function num(v){if(!v&&v!==0)return 0;if(typeof v==='number')return isNaN(v)?0:v;var s=String(v).replace(/[₹,\s]/g,'');return parseFloat(s)||0;}
+function sum(arr){return(arr||[]).reduce(function(a,b){return a+(b||0);},0);}
+function R(n){return Math.round(n);}
