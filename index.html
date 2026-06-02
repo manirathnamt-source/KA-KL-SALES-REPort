@@ -903,8 +903,9 @@ function buildFilters(sheets){
   fill('sel-rm',[...new Set(raw.map(function(s){return s.rm;}))].filter(Boolean).sort());
   fill('sel-cm',[...new Set(raw.map(function(s){return s.cm;}))].filter(Boolean).sort());
   fill('sel-city',[...new Set(raw.map(function(s){return s.city;}))].filter(Boolean).sort());
-  var ms=sheets&&sheets.length?sheets:['APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB','MAR'];
-  document.getElementById('sel-month').innerHTML=ms.map(function(m){return'<option value="'+m+'"'+(m===activeSheet?' selected':'')+'>'+m+'</option>';}).join('');
+  var ms=['APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB','MAR'];
+  var have=sheets&&sheets.length?sheets:[];
+  document.getElementById('sel-month').innerHTML=ms.map(function(m){var nd=have.length&&have.indexOf(m)<0;return'<option value="'+m+'"'+(m===activeSheet?' selected':'')+'>'+m+(nd?' (no data)':'')+'</option>';}).join('');
 }
 function fill(id,arr){var el=document.getElementById(id),v=el.value;el.innerHTML='<option value="">All</option>'+arr.map(function(a){return'<option value="'+a+'"'+(a===v?' selected':'')+'>'+a+'</option>';}).join('');}
 function applyFilter(){
