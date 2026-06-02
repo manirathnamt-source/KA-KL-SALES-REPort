@@ -275,6 +275,7 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
 <!-- TABS -->
 <div class="tabs">
   <div class="tab active" onclick="showTab('home',this)">&#127968; Overview</div>
+  <div class="tab" onclick="showTab('summary',this)">&#128203; Summary</div>
   <div class="tab" onclick="showTab('daywise',this)">&#128197; Day-wise</div>
   <div class="tab" onclick="showTab('mtd',this)">&#128202; MTD</div>
   <div class="tab" onclick="showTab('weekly',this)">&#128198; Weekly</div>
@@ -304,6 +305,19 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <div class="tw"><table id="t-store"><thead><tr>
     <th onclick="srt('t-store',0)">Store</th><th onclick="srt('t-store',1)">RM</th><th onclick="srt('t-store',2)">CM</th><th class="r" onclick="srt('t-store',3)">Target</th><th class="r" onclick="srt('t-store',4)">MTD</th><th class="r" onclick="srt('t-store',5)">Ach%</th><th class="r" onclick="srt('t-store',6)">Proj</th><th class="r" onclick="srt('t-store',7)">Proj%</th><th class="r" onclick="srt('t-store',8)">W-ins</th><th class="r" onclick="srt('t-store',9)">W-in%</th><th class="r" onclick="srt('t-store',10)">Conv%</th><th class="r" onclick="srt('t-store',11)">Conv Tgt</th><th class="r" onclick="srt('t-store',12)">ABV</th><th class="r" onclick="srt('t-store',13)">ABV Tgt</th><th class="r" onclick="srt('t-store',14)">UPT</th><th class="r" onclick="srt('t-store',15)">UPT Tgt</th><th class="r" onclick="srt('t-store',16)">Needed/day</th>
   </tr></thead><tbody id="b-store"></tbody></table></div>
+</div>
+
+<!-- SUMMARY (RM & CM — Target vs Achievement: Main & AOP) -->
+<div class="panel" id="panel-summary">
+  <div class="sh"><span class="sh-t" id="sum-rm-title">RM — Target vs Achievement</span><div class="sh-l"></div><button class="dl" onclick="dlT('t-sum-rm','RM-Summary')">&#8595; CSV</button></div>
+  <div class="tw"><table id="t-sum-rm"><thead><tr>
+    <th onclick="srt('t-sum-rm',0)">RM</th><th class="r" onclick="srt('t-sum-rm',1)">Main Target</th><th class="r" onclick="srt('t-sum-rm',2)">MTD Sales</th><th class="r" onclick="srt('t-sum-rm',3)">Ach%</th><th class="r" onclick="srt('t-sum-rm',4)">AOP Target</th><th class="r" onclick="srt('t-sum-rm',5)">AOP Ach%</th>
+  </tr></thead><tbody id="b-sum-rm"></tbody></table></div>
+
+  <div class="sh"><span class="sh-t" id="sum-cm-title">CM — Target vs Achievement</span><div class="sh-l"></div><button class="dl" onclick="dlT('t-sum-cm','CM-Summary')">&#8595; CSV</button></div>
+  <div class="tw"><table id="t-sum-cm"><thead><tr>
+    <th onclick="srt('t-sum-cm',0)">CM</th><th class="r" onclick="srt('t-sum-cm',1)">Main Target</th><th class="r" onclick="srt('t-sum-cm',2)">MTD Sales</th><th class="r" onclick="srt('t-sum-cm',3)">Ach%</th><th class="r" onclick="srt('t-sum-cm',4)">AOP Target</th><th class="r" onclick="srt('t-sum-cm',5)">AOP Ach%</th>
+  </tr></thead><tbody id="b-sum-cm"></tbody></table></div>
 </div>
 
 <!-- DAY-WISE -->
@@ -797,6 +811,12 @@ function L(n){if(!n&&n!==0)return'—';var a=Math.abs(n);return a>=1e7?'₹'+(n/
 function N(n){return(!n&&n!==0)?'—':Math.abs(n)>=1000?(n/1000).toFixed(1)+'K':Math.round(n)+'';}
 function R2(n){return(n===null||n===undefined)?'—':parseFloat(n).toFixed(2);}
 function pc(p){return p>=100?'gv':p>=85?'av':'rv';}
+
+// ═══════════════════════════════════════════
+// AOP TARGETS (embedded from AOP sheet — monthly ₹ per store code)
+// ═══════════════════════════════════════════
+var AOP_TARGETS={"BLR4JN":{"APR":3042895,"MAY":2906646,"JUN":3224560,"JUL":3542474,"AUG":3996638,"SEP":3315393,"OCT":4223720,"NOV":3315393,"DEC":4178303,"JAN":4042054,"FEB":4178303,"MAR":5449961},"BLRARS":{"APR":2463129,"MAY":2352840,"JUN":2610182,"JUL":2867524,"AUG":3235155,"SEP":2683708,"OCT":3418970,"NOV":2683708,"DEC":3382207,"JAN":3271918,"FEB":3382207,"MAR":4411575},"BLRBEL":{"APR":1996076,"MAY":1906700,"JUN":2115245,"JUL":2323790,"AUG":2621712,"SEP":2174829,"OCT":2770673,"NOV":2174829,"DEC":2740881,"JAN":2651504,"FEB":2740881,"MAR":3575062},"BLRBSW":{"APR":3349631,"MAY":3199647,"JUN":3549608,"JUL":3899570,"AUG":4399515,"SEP":3649597,"OCT":4649487,"NOV":3649597,"DEC":4599493,"JAN":4449509,"FEB":4599493,"MAR":5999338},"BLRCST":{"APR":8119907,"MAY":7756329,"JUN":8604678,"JUL":9453026,"AUG":10664953,"SEP":8847063,"OCT":11270916,"NOV":8847063,"DEC":11149723,"JAN":10786145,"FEB":11149723,"MAR":14543117},"BLRDVG":{"APR":2364044,"MAY":2258192,"JUN":2505181,"JUL":2752171,"AUG":3105014,"SEP":2575750,"OCT":3281435,"NOV":2575750,"DEC":3246151,"JAN":3140298,"FEB":3246151,"MAR":4234110},"BLRFSB":{"APR":5255601,"MAY":5020276,"JUN":5569368,"JUL":6118461,"AUG":6902879,"SEP":5726252,"OCT":7295088,"NOV":5726252,"DEC":7216646,"JAN":6981321,"FEB":7216646,"MAR":9413017},"BLRGRD":{"APR":708525,"MAY":676800,"JUN":750825,"JUL":824850,"AUG":930600,"SEP":771975,"OCT":983475,"NOV":771975,"DEC":972900,"JAN":941175,"FEB":972900,"MAR":1269001},"BLRHNR":{"APR":2338504,"MAY":2233794,"JUN":2478116,"JUL":2722437,"AUG":3071467,"SEP":2547922,"OCT":3245983,"NOV":2547922,"DEC":3211080,"JAN":3106370,"FEB":3211080,"MAR":4188365},"BLRHSR":{"APR":7832282,"MAY":7481582,"JUN":8299880,"JUL":9118179,"AUG":10287176,"SEP":8533680,"OCT":10871674,"NOV":8533680,"DEC":10754775,"JAN":10404075,"FEB":10754775,"MAR":14027967},"BLRIND":{"APR":4456351,"MAY":4256812,"JUN":4722401,"JUL":5187990,"AUG":5853117,"SEP":4855427,"OCT":6185681,"NOV":4855427,"DEC":6119168,"JAN":5919630,"FEB":6119168,"MAR":7981523},"BLRJAY":{"APR":8570996,"MAY":8187220,"JUN":9082697,"JUL":9978174,"AUG":11257427,"SEP":9338547,"OCT":11897054,"NOV":9338547,"DEC":11769128,"JAN":11385352,"FEB":11769128,"MAR":15351037},"BLRKGP":{"APR":2042268,"MAY":1950823,"JUN":2164195,"JUL":2377566,"AUG":2682382,"SEP":2225158,"OCT":2834790,"NOV":2225158,"DEC":2804309,"JAN":2712864,"FEB":2804309,"MAR":3657794},"BLRKHL":{"APR":3792529,"MAY":3622714,"JUN":4018949,"JUL":4415183,"AUG":4981232,"SEP":4132159,"OCT":5264257,"NOV":4132159,"DEC":5207652,"JAN":5037837,"FEB":5207652,"MAR":6792589},"BLRKRP":{"APR":2715166,"MAY":2593591,"JUN":2877265,"JUL":3160940,"AUG":3566188,"SEP":2958315,"OCT":3768813,"NOV":2958315,"DEC":3728288,"JAN":3606713,"FEB":3728288,"MAR":4862984},"BLRMAL":{"APR":1849847,"MAY":1767018,"JUN":1960286,"JUL":2153553,"AUG":2429650,"SEP":2015505,"OCT":2567698,"NOV":2015505,"DEC":2540089,"JAN":2457260,"FEB":2540089,"MAR":3313159},"BLRMNT":{"APR":3489911,"MAY":3333646,"JUN":3698264,"JUL":4062881,"AUG":4583764,"SEP":3802440,"OCT":4844205,"NOV":3802440,"DEC":4792117,"JAN":4635852,"FEB":4792117,"MAR":6250587},"BLRMOA":{"APR":4133908,"MAY":3948807,"JUN":4380708,"JUL":4812609,"AUG":5429610,"SEP":4504108,"OCT":5738111,"NOV":4504108,"DEC":5676410,"JAN":5491310,"FEB":5676410,"MAR":7404014},"BLRNKM":{"APR":2638665,"MAY":2520516,"JUN":2796197,"JUL":3071878,"AUG":3465709,"SEP":2874963,"OCT":3662624,"NOV":2874963,"DEC":3623241,"JAN":3505092,"FEB":3623241,"MAR":4725967},"BLRORN":{"APR":3457638,"MAY":3302819,"JUN":3664064,"JUL":4025310,"AUG":4541375,"SEP":3767277,"OCT":4799408,"NOV":3767277,"DEC":4747802,"JAN":4592982,"FEB":4747802,"MAR":6192785},"BLRRMM":{"APR":1717449,"MAY":1640548,"JUN":1819983,"JUL":1999418,"AUG":2255754,"SEP":1871250,"OCT":2383921,"NOV":1871250,"DEC":2358288,"JAN":2281387,"FEB":2358288,"MAR":3076028},"BLRRMZ":{"APR":1941470,"MAY":1854539,"JUN":2057379,"JUL":2260219,"AUG":2549991,"SEP":2115334,"OCT":2694877,"NOV":2115334,"DEC":2665900,"JAN":2578968,"FEB":2665900,"MAR":3477261},"BLRRRN":{"APR":3394420,"MAY":3242431,"JUN":3597072,"JUL":3951713,"AUG":4458343,"SEP":3698398,"OCT":4711658,"NOV":3698398,"DEC":4660995,"JAN":4509006,"FEB":4660995,"MAR":6079559},"BLRSKR":{"APR":4038556,"MAY":3857725,"JUN":4279664,"JUL":4701603,"AUG":5304372,"SEP":4400218,"OCT":5605757,"NOV":4400218,"DEC":5545480,"JAN":5364649,"FEB":5545480,"MAR":7233235},"BLRSMR":{"APR":3065271,"MAY":2928020,"JUN":3248272,"JUL":3568525,"AUG":4026028,"SEP":3339773,"OCT":4254779,"NOV":3339773,"DEC":4209029,"JAN":4071778,"FEB":4209029,"MAR":5490038},"BLRSNK":{"APR":3890393,"MAY":3716196,"JUN":4122655,"JUL":4529114,"AUG":5109770,"SEP":4238786,"OCT":5400098,"NOV":4238786,"DEC":5342032,"JAN":5167835,"FEB":5342032,"MAR":6967868},"BLRVGA":{"APR":2056799,"MAY":1964703,"JUN":2179593,"JUL":2394482,"AUG":2701467,"SEP":2240990,"OCT":2854960,"NOV":2240990,"DEC":2824261,"JAN":2732166,"FEB":2824261,"MAR":3683819},"BLRWPX":{"APR":5507648,"MAY":5261037,"JUN":5836463,"JUL":6411889,"AUG":7233926,"SEP":6000871,"OCT":7644945,"NOV":6000871,"DEC":7562741,"JAN":7316130,"FEB":7562741,"MAR":9864445},"BLRWMR":{"APR":1773478,"MAY":1694069,"JUN":1879358,"JUL":2064646,"AUG":2329345,"SEP":1932297,"OCT":2461694,"NOV":1932297,"DEC":2435224,"JAN":2355814,"FEB":2435224,"MAR":3176379},"KCHFRM":{"APR":1213300,"MAY":1158973,"JUN":1285736,"JUL":1412499,"AUG":1593588,"SEP":1321954,"OCT":1684133,"NOV":1321954,"DEC":1666024,"JAN":1611697,"FEB":1666024,"MAR":2173075},"KCHLUL":{"APR":2567335,"MAY":2452380,"JUN":2720609,"JUL":2988838,"AUG":3372022,"SEP":2797245,"OCT":3563614,"NOV":2797245,"DEC":3525296,"JAN":3410340,"FEB":3525296,"MAR":4598212},"KCHMGR":{"APR":1298528,"MAY":1240385,"JUN":1376052,"JUL":1511719,"AUG":1705529,"SEP":1414814,"OCT":1802434,"NOV":1414814,"DEC":1783053,"JAN":1724910,"FEB":1783053,"MAR":2325722},"TRVLUL":{"APR":1578410,"MAY":1507734,"JUN":1672643,"JUL":1837551,"AUG":2073135,"SEP":1719760,"OCT":2190927,"NOV":1719760,"DEC":2167368,"JAN":2096693,"FEB":2167368,"MAR":2827002},"BGMABR":{"APR":1913597,"MAY":1827913,"JUN":2027841,"JUL":2227769,"AUG":2513381,"SEP":2084963,"OCT":2656186,"NOV":2084963,"DEC":2627625,"JAN":2541942,"FEB":2627625,"MAR":3427337},"HSPVCR":{"APR":1949339,"MAY":1862055,"JUN":2065717,"JUL":2269380,"AUG":2560326,"SEP":2123907,"OCT":2705799,"NOV":2123907,"DEC":2676704,"JAN":2589420,"FEB":2676704,"MAR":3491353},"HBLGKR":{"APR":2056780,"MAY":1964685,"JUN":2179573,"JUL":2394460,"AUG":2701442,"SEP":2240969,"OCT":2854933,"NOV":2240969,"DEC":2824235,"JAN":2732141,"FEB":2824235,"MAR":3683785},"HBLKPR":{"APR":2906155,"MAY":2776029,"JUN":3079657,"JUL":3383285,"AUG":3817040,"SEP":3166408,"OCT":4033917,"NOV":3166408,"DEC":3990541,"JAN":3860415,"FEB":3990541,"MAR":5205054},"MGLBMT":{"APR":1712398,"MAY":1635724,"JUN":1814631,"JUL":1993539,"AUG":2249120,"SEP":1865748,"OCT":2376911,"NOV":1865748,"DEC":2351353,"JAN":2274679,"FEB":2351353,"MAR":3066982},"MGLCCM":{"APR":1918294,"MAY":1832400,"JUN":2032819,"JUL":2233238,"AUG":2519550,"SEP":2090081,"OCT":2662707,"NOV":2090081,"DEC":2634075,"JAN":2548182,"FEB":2634075,"MAR":3435750},"MGLNFM":{"APR":770820,"MAY":736306,"JUN":816839,"JUL":897373,"AUG":1012420,"SEP":839849,"OCT":1069944,"NOV":839849,"DEC":1058440,"JAN":1023925,"FEB":1058440,"MAR":1380573},"MYSDUR":{"APR":5064463,"MAY":4837696,"JUN":5366819,"JUL":5895942,"AUG":6651832,"SEP":5517997,"OCT":7029777,"NOV":5517997,"DEC":6954188,"JAN":6727421,"FEB":6954188,"MAR":9070680},"MYSMOM":{"APR":867822,"MAY":828965,"JUN":919633,"JUL":1010301,"AUG":1139827,"SEP":945538,"OCT":1204589,"NOV":945538,"DEC":1191637,"JAN":1152779,"FEB":1191637,"MAR":1554309},"MYSNEX":{"APR":1383308,"MAY":1321369,"JUN":1465894,"JUL":1610419,"AUG":1816882,"SEP":1507187,"OCT":1920114,"NOV":1507187,"DEC":1899468,"JAN":1837529,"FEB":1899468,"MAR":2477567},"UDPMMT":{"APR":2118035,"MAY":2023198,"JUN":2244485,"JUL":2465773,"AUG":2781897,"SEP":2307710,"OCT":2939960,"NOV":2307710,"DEC":2908347,"JAN":2813510,"FEB":2908347,"MAR":3793496}};
+function aopTgt(s){var m=AOP_TARGETS[((s&&s.code)||'').toUpperCase()];return m?(m[activeSheet]||0):0;}
 function nd(c,m){return'<tr><td colspan="'+c+'" style="text-align:center;padding:18px;color:#9ca3af;">'+(m||'No data')+'</td></tr>';}
 function ts(){return new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
 
@@ -910,8 +930,49 @@ function resetFilter(){['sel-rm','sel-cm','sel-city','sel-qtr'].forEach(function
 // ═══════════════════════════════════════════
 function renderAll(){
   renderKPIs();renderGroup('rm','b-rm');renderGroup('cm','b-cm');
+  renderSummary();
   renderStores();renderDaywise();renderMTD();renderWK(activeWK);
   renderKPIAlerts();renderAudit();
+}
+
+// ═══════════════════════════════════════════
+// SUMMARY — RM & CM target vs achievement (Main + AOP)
+// ═══════════════════════════════════════════
+function renderSummary(){
+  ['rm','cm'].forEach(function(key){
+    var el=document.getElementById('b-sum-'+key);if(!el)return;
+    var G={};
+    filtered.forEach(function(s){
+      var k=s[key]||'?';
+      if(!G[k])G[k]={main:0,sales:0,aop:0,n:0};
+      var g=G[k];g.main+=s.target;g.sales+=s.mtdSales;g.aop+=aopTgt(s);g.n++;
+    });
+    var rows=Object.entries(G).sort(function(a,b){return b[1].sales-a[1].sales;});
+    var tM=0,tS=0,tA=0;rows.forEach(function(r){tM+=r[1].main;tS+=r[1].sales;tA+=r[1].aop;});
+    var html=rows.map(function(e){
+      var nm=e[0],g=e[1];
+      var ap=g.main?Math.round(g.sales/g.main*100):0;
+      var aopP=g.aop?Math.round(g.sales/g.aop*100):0;
+      return'<tr>'+
+        '<td style="font-weight:700;color:#3b82f6;cursor:pointer;" onclick="filterBy(\''+key+'\',\''+nm+'\')">'+nm+'</td>'+
+        '<td class="r">'+L(g.main)+'</td>'+
+        '<td class="r" style="font-weight:600;">'+L(g.sales)+'</td>'+
+        '<td class="r '+pc(ap)+'">'+ap+'%</td>'+
+        '<td class="r">'+(g.aop?L(g.aop):'—')+'</td>'+
+        '<td class="r '+(g.aop?pc(aopP):'')+'">'+(g.aop?aopP+'%':'—')+'</td>'+
+      '</tr>';
+    }).join('');
+    var tAp=tM?Math.round(tS/tM*100):0,tAopP=tA?Math.round(tS/tA*100):0;
+    html+='<tr class="ft"><td>Total ('+rows.length+')</td>'+
+      '<td class="r">'+L(tM)+'</td><td class="r">'+L(tS)+'</td>'+
+      '<td class="r '+pc(tAp)+'">'+tAp+'%</td>'+
+      '<td class="r">'+(tA?L(tA):'—')+'</td>'+
+      '<td class="r '+(tA?pc(tAopP):'')+'">'+(tA?tAopP+'%':'—')+'</td></tr>';
+    el.innerHTML=html||'<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:18px;">No data — connect and Load a month.</td></tr>';
+  });
+  var ttl='Target vs Achievement · '+(activeSheet||'');
+  var rt=document.getElementById('sum-rm-title');if(rt)rt.textContent='RM — '+ttl;
+  var ct=document.getElementById('sum-cm-title');if(ct)ct.textContent='CM — '+ttl;
 }
 
 // ═══════════════════════════════════════════
