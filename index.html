@@ -243,14 +243,28 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
 </div>
 <div class="ibar" id="ibar"></div>
 
+<style>
+.mm{position:relative;display:inline-block;vertical-align:middle;}
+.mm>summary{list-style:none;cursor:pointer;padding:4px 22px 4px 8px;border:1px solid var(--border,#d1d5db);border-radius:6px;background:var(--card,#fff);color:inherit;font-size:12px;min-width:80px;position:relative;}
+.mm>summary::-webkit-details-marker{display:none;}
+.mm>summary::after{content:'\25BC';position:absolute;right:7px;top:50%;transform:translateY(-50%);font-size:8px;opacity:.6;}
+.mm[open]>summary{border-color:#3b82f6;}
+.mm-pop{position:absolute;z-index:50;top:calc(100% + 4px);left:0;background:var(--card,#fff);border:1px solid var(--border,#d1d5db);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:6px;min-width:170px;max-height:280px;overflow:auto;}
+.mm-it{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:5px;font-size:12px;cursor:pointer;white-space:nowrap;}
+.mm-it:hover{background:rgba(59,130,246,.10);}
+.mm-it input{margin:0;cursor:pointer;}
+.mm-it .nd{color:#9ca3af;font-size:10px;}
+.mm-foot{display:flex;gap:6px;padding:6px 4px 2px;border-top:1px solid var(--border,#e5e7eb);margin-top:4px;}
+.mm-foot button{flex:1;font-size:11px;padding:4px 6px;border:1px solid var(--border,#d1d5db);border-radius:5px;background:var(--card,#fff);color:inherit;cursor:pointer;}
+.mm-foot button:hover{background:rgba(59,130,246,.10);}
+</style>
 <!-- CONTROLS -->
 <div class="cbar">
-  <label>Month</label>
-  <select id="sel-month" onchange="changeMonth()">
-    <option>APR</option><option>MAY</option><option>JUN</option><option>JUL</option>
-    <option>AUG</option><option>SEP</option><option>OCT</option><option>NOV</option>
-    <option>DEC</option><option>JAN</option><option>FEB</option><option>MAR</option>
-  </select>
+  <label>Months</label>
+  <details class="mm" id="mm-wrap">
+    <summary id="mm-sum">APR</summary>
+    <div class="mm-pop" id="mm-pop"></div>
+  </details>
   <label>RM</label><select id="sel-rm" onchange="applyFilter()"><option value="">All</option></select>
   <label>CM</label><select id="sel-cm" onchange="applyFilter()"><option value="">All</option></select>
   <label>City</label><select id="sel-city" onchange="applyFilter()"><option value="">All</option></select>
@@ -803,6 +817,9 @@ var _occCrossTarget = 'cat-occ-cross';
 var raw=[],labels=[],totalDays=30,activeSheet='APR',activeURL='';
 var filtered=[],liveTimer=null,sortDirs={},activeWK='sales',activeCV='cat';
 var catData=null;
+var ALL_MONTHS=['APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB','MAR'];
+var selMonths=['APR'];   // checked months; selMonths[0] is the primary month driving single-month tabs
+var monthCache={};        // month -> stores array, for multi-month Summary combine
 
 // ═══════════════════════════════════════════
 // FORMAT
@@ -816,7 +833,8 @@ function pc(p){return p>=100?'gv':p>=85?'av':'rv';}
 // AOP TARGETS (embedded from AOP sheet — monthly ₹ per store code)
 // ═══════════════════════════════════════════
 var AOP_TARGETS={"BLR4JN":{"APR":3042895,"MAY":2906646,"JUN":3224560,"JUL":3542474,"AUG":3996638,"SEP":3315393,"OCT":4223720,"NOV":3315393,"DEC":4178303,"JAN":4042054,"FEB":4178303,"MAR":5449961},"BLRARS":{"APR":2463129,"MAY":2352840,"JUN":2610182,"JUL":2867524,"AUG":3235155,"SEP":2683708,"OCT":3418970,"NOV":2683708,"DEC":3382207,"JAN":3271918,"FEB":3382207,"MAR":4411575},"BLRBEL":{"APR":1996076,"MAY":1906700,"JUN":2115245,"JUL":2323790,"AUG":2621712,"SEP":2174829,"OCT":2770673,"NOV":2174829,"DEC":2740881,"JAN":2651504,"FEB":2740881,"MAR":3575062},"BLRBSW":{"APR":3349631,"MAY":3199647,"JUN":3549608,"JUL":3899570,"AUG":4399515,"SEP":3649597,"OCT":4649487,"NOV":3649597,"DEC":4599493,"JAN":4449509,"FEB":4599493,"MAR":5999338},"BLRCST":{"APR":8119907,"MAY":7756329,"JUN":8604678,"JUL":9453026,"AUG":10664953,"SEP":8847063,"OCT":11270916,"NOV":8847063,"DEC":11149723,"JAN":10786145,"FEB":11149723,"MAR":14543117},"BLRDVG":{"APR":2364044,"MAY":2258192,"JUN":2505181,"JUL":2752171,"AUG":3105014,"SEP":2575750,"OCT":3281435,"NOV":2575750,"DEC":3246151,"JAN":3140298,"FEB":3246151,"MAR":4234110},"BLRFSB":{"APR":5255601,"MAY":5020276,"JUN":5569368,"JUL":6118461,"AUG":6902879,"SEP":5726252,"OCT":7295088,"NOV":5726252,"DEC":7216646,"JAN":6981321,"FEB":7216646,"MAR":9413017},"BLRGRD":{"APR":708525,"MAY":676800,"JUN":750825,"JUL":824850,"AUG":930600,"SEP":771975,"OCT":983475,"NOV":771975,"DEC":972900,"JAN":941175,"FEB":972900,"MAR":1269001},"BLRHNR":{"APR":2338504,"MAY":2233794,"JUN":2478116,"JUL":2722437,"AUG":3071467,"SEP":2547922,"OCT":3245983,"NOV":2547922,"DEC":3211080,"JAN":3106370,"FEB":3211080,"MAR":4188365},"BLRHSR":{"APR":7832282,"MAY":7481582,"JUN":8299880,"JUL":9118179,"AUG":10287176,"SEP":8533680,"OCT":10871674,"NOV":8533680,"DEC":10754775,"JAN":10404075,"FEB":10754775,"MAR":14027967},"BLRIND":{"APR":4456351,"MAY":4256812,"JUN":4722401,"JUL":5187990,"AUG":5853117,"SEP":4855427,"OCT":6185681,"NOV":4855427,"DEC":6119168,"JAN":5919630,"FEB":6119168,"MAR":7981523},"BLRJAY":{"APR":8570996,"MAY":8187220,"JUN":9082697,"JUL":9978174,"AUG":11257427,"SEP":9338547,"OCT":11897054,"NOV":9338547,"DEC":11769128,"JAN":11385352,"FEB":11769128,"MAR":15351037},"BLRKGP":{"APR":2042268,"MAY":1950823,"JUN":2164195,"JUL":2377566,"AUG":2682382,"SEP":2225158,"OCT":2834790,"NOV":2225158,"DEC":2804309,"JAN":2712864,"FEB":2804309,"MAR":3657794},"BLRKHL":{"APR":3792529,"MAY":3622714,"JUN":4018949,"JUL":4415183,"AUG":4981232,"SEP":4132159,"OCT":5264257,"NOV":4132159,"DEC":5207652,"JAN":5037837,"FEB":5207652,"MAR":6792589},"BLRKRP":{"APR":2715166,"MAY":2593591,"JUN":2877265,"JUL":3160940,"AUG":3566188,"SEP":2958315,"OCT":3768813,"NOV":2958315,"DEC":3728288,"JAN":3606713,"FEB":3728288,"MAR":4862984},"BLRMAL":{"APR":1849847,"MAY":1767018,"JUN":1960286,"JUL":2153553,"AUG":2429650,"SEP":2015505,"OCT":2567698,"NOV":2015505,"DEC":2540089,"JAN":2457260,"FEB":2540089,"MAR":3313159},"BLRMNT":{"APR":3489911,"MAY":3333646,"JUN":3698264,"JUL":4062881,"AUG":4583764,"SEP":3802440,"OCT":4844205,"NOV":3802440,"DEC":4792117,"JAN":4635852,"FEB":4792117,"MAR":6250587},"BLRMOA":{"APR":4133908,"MAY":3948807,"JUN":4380708,"JUL":4812609,"AUG":5429610,"SEP":4504108,"OCT":5738111,"NOV":4504108,"DEC":5676410,"JAN":5491310,"FEB":5676410,"MAR":7404014},"BLRNKM":{"APR":2638665,"MAY":2520516,"JUN":2796197,"JUL":3071878,"AUG":3465709,"SEP":2874963,"OCT":3662624,"NOV":2874963,"DEC":3623241,"JAN":3505092,"FEB":3623241,"MAR":4725967},"BLRORN":{"APR":3457638,"MAY":3302819,"JUN":3664064,"JUL":4025310,"AUG":4541375,"SEP":3767277,"OCT":4799408,"NOV":3767277,"DEC":4747802,"JAN":4592982,"FEB":4747802,"MAR":6192785},"BLRRMM":{"APR":1717449,"MAY":1640548,"JUN":1819983,"JUL":1999418,"AUG":2255754,"SEP":1871250,"OCT":2383921,"NOV":1871250,"DEC":2358288,"JAN":2281387,"FEB":2358288,"MAR":3076028},"BLRRMZ":{"APR":1941470,"MAY":1854539,"JUN":2057379,"JUL":2260219,"AUG":2549991,"SEP":2115334,"OCT":2694877,"NOV":2115334,"DEC":2665900,"JAN":2578968,"FEB":2665900,"MAR":3477261},"BLRRRN":{"APR":3394420,"MAY":3242431,"JUN":3597072,"JUL":3951713,"AUG":4458343,"SEP":3698398,"OCT":4711658,"NOV":3698398,"DEC":4660995,"JAN":4509006,"FEB":4660995,"MAR":6079559},"BLRSKR":{"APR":4038556,"MAY":3857725,"JUN":4279664,"JUL":4701603,"AUG":5304372,"SEP":4400218,"OCT":5605757,"NOV":4400218,"DEC":5545480,"JAN":5364649,"FEB":5545480,"MAR":7233235},"BLRSMR":{"APR":3065271,"MAY":2928020,"JUN":3248272,"JUL":3568525,"AUG":4026028,"SEP":3339773,"OCT":4254779,"NOV":3339773,"DEC":4209029,"JAN":4071778,"FEB":4209029,"MAR":5490038},"BLRSNK":{"APR":3890393,"MAY":3716196,"JUN":4122655,"JUL":4529114,"AUG":5109770,"SEP":4238786,"OCT":5400098,"NOV":4238786,"DEC":5342032,"JAN":5167835,"FEB":5342032,"MAR":6967868},"BLRVGA":{"APR":2056799,"MAY":1964703,"JUN":2179593,"JUL":2394482,"AUG":2701467,"SEP":2240990,"OCT":2854960,"NOV":2240990,"DEC":2824261,"JAN":2732166,"FEB":2824261,"MAR":3683819},"BLRWPX":{"APR":5507648,"MAY":5261037,"JUN":5836463,"JUL":6411889,"AUG":7233926,"SEP":6000871,"OCT":7644945,"NOV":6000871,"DEC":7562741,"JAN":7316130,"FEB":7562741,"MAR":9864445},"BLRWMR":{"APR":1773478,"MAY":1694069,"JUN":1879358,"JUL":2064646,"AUG":2329345,"SEP":1932297,"OCT":2461694,"NOV":1932297,"DEC":2435224,"JAN":2355814,"FEB":2435224,"MAR":3176379},"KCHFRM":{"APR":1213300,"MAY":1158973,"JUN":1285736,"JUL":1412499,"AUG":1593588,"SEP":1321954,"OCT":1684133,"NOV":1321954,"DEC":1666024,"JAN":1611697,"FEB":1666024,"MAR":2173075},"KCHLUL":{"APR":2567335,"MAY":2452380,"JUN":2720609,"JUL":2988838,"AUG":3372022,"SEP":2797245,"OCT":3563614,"NOV":2797245,"DEC":3525296,"JAN":3410340,"FEB":3525296,"MAR":4598212},"KCHMGR":{"APR":1298528,"MAY":1240385,"JUN":1376052,"JUL":1511719,"AUG":1705529,"SEP":1414814,"OCT":1802434,"NOV":1414814,"DEC":1783053,"JAN":1724910,"FEB":1783053,"MAR":2325722},"TRVLUL":{"APR":1578410,"MAY":1507734,"JUN":1672643,"JUL":1837551,"AUG":2073135,"SEP":1719760,"OCT":2190927,"NOV":1719760,"DEC":2167368,"JAN":2096693,"FEB":2167368,"MAR":2827002},"BGMABR":{"APR":1913597,"MAY":1827913,"JUN":2027841,"JUL":2227769,"AUG":2513381,"SEP":2084963,"OCT":2656186,"NOV":2084963,"DEC":2627625,"JAN":2541942,"FEB":2627625,"MAR":3427337},"HSPVCR":{"APR":1949339,"MAY":1862055,"JUN":2065717,"JUL":2269380,"AUG":2560326,"SEP":2123907,"OCT":2705799,"NOV":2123907,"DEC":2676704,"JAN":2589420,"FEB":2676704,"MAR":3491353},"HBLGKR":{"APR":2056780,"MAY":1964685,"JUN":2179573,"JUL":2394460,"AUG":2701442,"SEP":2240969,"OCT":2854933,"NOV":2240969,"DEC":2824235,"JAN":2732141,"FEB":2824235,"MAR":3683785},"HBLKPR":{"APR":2906155,"MAY":2776029,"JUN":3079657,"JUL":3383285,"AUG":3817040,"SEP":3166408,"OCT":4033917,"NOV":3166408,"DEC":3990541,"JAN":3860415,"FEB":3990541,"MAR":5205054},"MGLBMT":{"APR":1712398,"MAY":1635724,"JUN":1814631,"JUL":1993539,"AUG":2249120,"SEP":1865748,"OCT":2376911,"NOV":1865748,"DEC":2351353,"JAN":2274679,"FEB":2351353,"MAR":3066982},"MGLCCM":{"APR":1918294,"MAY":1832400,"JUN":2032819,"JUL":2233238,"AUG":2519550,"SEP":2090081,"OCT":2662707,"NOV":2090081,"DEC":2634075,"JAN":2548182,"FEB":2634075,"MAR":3435750},"MGLNFM":{"APR":770820,"MAY":736306,"JUN":816839,"JUL":897373,"AUG":1012420,"SEP":839849,"OCT":1069944,"NOV":839849,"DEC":1058440,"JAN":1023925,"FEB":1058440,"MAR":1380573},"MYSDUR":{"APR":5064463,"MAY":4837696,"JUN":5366819,"JUL":5895942,"AUG":6651832,"SEP":5517997,"OCT":7029777,"NOV":5517997,"DEC":6954188,"JAN":6727421,"FEB":6954188,"MAR":9070680},"MYSMOM":{"APR":867822,"MAY":828965,"JUN":919633,"JUL":1010301,"AUG":1139827,"SEP":945538,"OCT":1204589,"NOV":945538,"DEC":1191637,"JAN":1152779,"FEB":1191637,"MAR":1554309},"MYSNEX":{"APR":1383308,"MAY":1321369,"JUN":1465894,"JUL":1610419,"AUG":1816882,"SEP":1507187,"OCT":1920114,"NOV":1507187,"DEC":1899468,"JAN":1837529,"FEB":1899468,"MAR":2477567},"UDPMMT":{"APR":2118035,"MAY":2023198,"JUN":2244485,"JUL":2465773,"AUG":2781897,"SEP":2307710,"OCT":2939960,"NOV":2307710,"DEC":2908347,"JAN":2813510,"FEB":2908347,"MAR":3793496}};
-function aopTgt(s){var m=AOP_TARGETS[((s&&s.code)||'').toUpperCase()];return m?(m[activeSheet]||0):0;}
+function aopTgtM(s,mo){var t=AOP_TARGETS[((s&&s.code)||'').toUpperCase()];return t?(t[mo]||0):0;}
+function aopTgt(s){return aopTgtM(s,activeSheet);}
 function nd(c,m){return'<tr><td colspan="'+c+'" style="text-align:center;padding:18px;color:#9ca3af;">'+(m||'No data')+'</td></tr>';}
 function ts(){return new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
 
@@ -861,7 +879,7 @@ function doLoad(){
   var url=document.getElementById('url-inp').value.trim();
   if(!url){showInfo('Paste your Apps Script URL above','wrn');return;}
   activeURL=url;localStorage.setItem('ka_url',url);
-  connectTo(url,document.getElementById('sel-month').value||'APR');
+  connectTo(url,activeSheet||selMonths[0]||'APR');
 }
 function connectTo(url,sheet){
   var btn=document.getElementById('load-btn');btn.textContent='...';btn.disabled=true;
@@ -874,18 +892,72 @@ function onData(d,url,sheet){
   if(!d||!d.stores||!d.stores.length){showInfo('Connected but no store data — check sheet name matches (APR,MAY etc)','wrn');setSt('No data','red');return;}
   raw=d.stores;labels=d.dayLabels||[];totalDays=d.totalDaysInMonth||30;
   activeURL=url;activeSheet=sheet;showInfo('','');
+  monthCache[sheet]=d.stores;   // cache for multi-month Summary combine
   buildFilters(d.sheets);applyFilter();  // applyFilter calls renderAll which refreshes ALL tabs
+  fetchCombineMonths();         // load any other checked months in the background
   setSt('✓ '+raw.length+' stores · '+labels.length+' days · '+activeSheet,'green');
   startLive();
 }
 function doRefresh(){if(activeURL)connectTo(activeURL,activeSheet);}
-function changeMonth(){
-  var s=document.getElementById('sel-month').value;
-  activeSheet=s;localStorage.setItem('ka_sheet',s);
-  // Clear all data so stale month data doesn't persist
-  raw=[];filtered=[];labels=[];
-  renderAll();
-  if(activeURL)connectTo(activeURL,s);
+// Month checkbox toggled
+function onMonthToggle(cb){
+  var m=cb.value;
+  if(cb.checked){ if(selMonths.indexOf(m)<0) selMonths.push(m); }
+  else { selMonths=selMonths.filter(function(x){return x!==m;}); }
+  if(!selMonths.length){ selMonths=[m]; cb.checked=true; }   // keep at least one
+  selMonths.sort(function(a,b){return ALL_MONTHS.indexOf(a)-ALL_MONTHS.indexOf(b);});
+  var prevPrimary=activeSheet;
+  activeSheet=selMonths[0];
+  localStorage.setItem('ka_sheet',activeSheet);
+  localStorage.setItem('ka_months',JSON.stringify(selMonths));
+  updateMonthLabel();
+  if(activeSheet!==prevPrimary){
+    // primary month changed → reload it (also caches + triggers combine fetch)
+    raw=[];filtered=[];labels=[];renderAll();
+    if(activeURL)connectTo(activeURL,activeSheet);
+  } else {
+    // primary unchanged → just (un)load the extra month(s) for the Summary combine
+    fetchCombineMonths();
+    renderSummary();
+  }
+}
+function selectAllMonths(on){
+  selMonths=on?ALL_MONTHS.slice():[activeSheet];
+  selMonths.sort(function(a,b){return ALL_MONTHS.indexOf(a)-ALL_MONTHS.indexOf(b);});
+  if(!selMonths.length)selMonths=[activeSheet||'APR'];
+  activeSheet=selMonths[0];
+  localStorage.setItem('ka_months',JSON.stringify(selMonths));
+  renderMonthPicker(window._lastSheets||[]);
+  fetchCombineMonths();renderSummary();
+}
+// Fetch any selected months not yet cached, then refresh the Summary
+function fetchCombineMonths(){
+  if(!activeURL)return;
+  selMonths.forEach(function(m){
+    if(monthCache[m])return;
+    jfetch(activeURL,m).then(function(d){
+      if(d&&d.stores)monthCache[m]=d.stores;
+      renderSummary();
+    }).catch(function(){});
+  });
+}
+// Build the month checkbox list (all 12 months; flags months with no sheet)
+function renderMonthPicker(sheets){
+  window._lastSheets=sheets||[];
+  var have=sheets&&sheets.length?sheets:[];
+  var pop=document.getElementById('mm-pop');if(!pop)return;
+  pop.innerHTML=ALL_MONTHS.map(function(m){
+    var nd=have.length&&have.indexOf(m)<0;
+    var ck=selMonths.indexOf(m)>=0?' checked':'';
+    return '<label class="mm-it"><input type="checkbox" value="'+m+'" onchange="onMonthToggle(this)"'+ck+'>'+m+(nd?' <span class="nd">(no data)</span>':'')+'</label>';
+  }).join('')+
+  '<div class="mm-foot"><button type="button" onclick="selectAllMonths(true)">All</button><button type="button" onclick="selectAllMonths(false)">Clear</button></div>';
+  updateMonthLabel();
+}
+function updateMonthLabel(){
+  var el=document.getElementById('mm-sum');if(!el)return;
+  el.textContent=selMonths.length<=1?(selMonths[0]||'Select'):(selMonths.length+' months');
+  el.title=selMonths.join(' + ');
 }
 function startLive(){
   if(liveTimer){clearInterval(liveTimer);liveTimer=null;}
@@ -903,9 +975,7 @@ function buildFilters(sheets){
   fill('sel-rm',[...new Set(raw.map(function(s){return s.rm;}))].filter(Boolean).sort());
   fill('sel-cm',[...new Set(raw.map(function(s){return s.cm;}))].filter(Boolean).sort());
   fill('sel-city',[...new Set(raw.map(function(s){return s.city;}))].filter(Boolean).sort());
-  var ms=['APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB','MAR'];
-  var have=sheets&&sheets.length?sheets:[];
-  document.getElementById('sel-month').innerHTML=ms.map(function(m){var nd=have.length&&have.indexOf(m)<0;return'<option value="'+m+'"'+(m===activeSheet?' selected':'')+'>'+m+(nd?' (no data)':'')+'</option>';}).join('');
+  renderMonthPicker(sheets);
 }
 function fill(id,arr){var el=document.getElementById(id),v=el.value;el.innerHTML='<option value="">All</option>'+arr.map(function(a){return'<option value="'+a+'"'+(a===v?' selected':'')+'>'+a+'</option>';}).join('');}
 function applyFilter(){
@@ -939,14 +1009,28 @@ function renderAll(){
 // ═══════════════════════════════════════════
 // SUMMARY — RM & CM target vs achievement (Main + AOP)
 // ═══════════════════════════════════════════
+// Stores to feed the Summary — single month uses `filtered`; multi-month combines
+// each selected month's stores (same RM/CM/City filter) so totals are summed.
+function summaryEntries(){
+  if(selMonths.length<=1) return filtered.map(function(s){return{s:s,m:activeSheet};});
+  var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value;
+  var pred=function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy);};
+  var out=[];
+  selMonths.forEach(function(m){
+    var arr=(m===activeSheet?raw:monthCache[m])||[];
+    arr.filter(pred).forEach(function(s){out.push({s:s,m:m});});
+  });
+  return out;
+}
 function renderSummary(){
+  var entries=summaryEntries();
   ['rm','cm'].forEach(function(key){
     var el=document.getElementById('b-sum-'+key);if(!el)return;
     var G={};
-    filtered.forEach(function(s){
-      var k=s[key]||'?';
+    entries.forEach(function(e){
+      var s=e.s,k=s[key]||'?';
       if(!G[k])G[k]={main:0,sales:0,aop:0,proj:0,n:0};
-      var g=G[k];g.main+=s.target;g.sales+=s.mtdSales;g.aop+=aopTgt(s);g.proj+=(s.projectedTotal||0);g.n++;
+      var g=G[k];g.main+=s.target;g.sales+=s.mtdSales;g.aop+=aopTgtM(s,e.m);g.proj+=(s.projectedTotal||0);g.n++;
     });
     var rows=Object.entries(G).sort(function(a,b){return b[1].sales-a[1].sales;});
     var tM=0,tS=0,tA=0,tP=0;rows.forEach(function(r){tM+=r[1].main;tS+=r[1].sales;tA+=r[1].aop;tP+=r[1].proj;});
@@ -976,7 +1060,8 @@ function renderSummary(){
       '<td class="r '+(tA?pc(tAopP):'')+'">'+(tA?tAopP+'%':'—')+'</td></tr>';
     el.innerHTML=html||'<tr><td colspan="8" style="text-align:center;color:#9ca3af;padding:18px;">No data — connect and Load a month.</td></tr>';
   });
-  var ttl='Target vs Achievement · '+(activeSheet||'');
+  var lbl=selMonths.length>1?('Combined '+selMonths.join('+')):(activeSheet||'');
+  var ttl='Target vs Achievement · '+lbl;
   var rt=document.getElementById('sum-rm-title');if(rt)rt.textContent='RM — '+ttl;
   var ct=document.getElementById('sum-cm-title');if(ct)ct.textContent='CM — '+ttl;
 }
@@ -2350,13 +2435,16 @@ window.addEventListener('load',function(){
   var savedURL=localStorage.getItem('ka_url')||'';
   var savedSheet=localStorage.getItem('ka_sheet')||'APR';
   var savedCatURL=localStorage.getItem('ka_cat_url')||'';
+  try{var sm=JSON.parse(localStorage.getItem('ka_months')||'null');if(sm&&sm.length)selMonths=sm;}catch(e){}
+  if(selMonths.indexOf(savedSheet)<0)selMonths.unshift(savedSheet);
+  selMonths.sort(function(a,b){return ALL_MONTHS.indexOf(a)-ALL_MONTHS.indexOf(b);});
+  activeSheet=savedSheet;
   var urlInp=document.getElementById('url-inp');
-  var monthSel=document.getElementById('sel-month');
   var catInp=document.getElementById('cat-url');
   if(urlInp&&savedURL)urlInp.value=savedURL;
-  if(monthSel&&savedSheet)monthSel.value=savedSheet;
+  renderMonthPicker([]);
   if(catInp&&savedCatURL)catInp.value=savedCatURL;
-  if(savedURL){activeURL=savedURL;activeSheet=savedSheet;connectTo(savedURL,savedSheet);}
+  if(savedURL){activeURL=savedURL;connectTo(savedURL,savedSheet);}
   else{setSt('Paste URL above and click Load','');showInfo('Paste your Apps Script URL in the top bar and click ▶ Load','inf');}
 });
 
