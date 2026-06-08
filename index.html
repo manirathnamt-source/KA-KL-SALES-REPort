@@ -325,12 +325,12 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
 <div class="panel" id="panel-summary">
   <div class="sh"><span class="sh-t" id="sum-rm-title">RM — Target vs Achievement</span><div class="sh-l"></div><button class="dl" onclick="dlT('t-sum-rm','RM-Summary')">&#8595; CSV</button></div>
   <div class="tw"><table id="t-sum-rm"><thead><tr>
-    <th onclick="srt('t-sum-rm',0)">RM</th><th class="r" onclick="srt('t-sum-rm',1)">Main Target</th><th class="r" onclick="srt('t-sum-rm',2)">MTD Sales</th><th class="r" onclick="srt('t-sum-rm',3)">Ach%</th><th class="r" onclick="srt('t-sum-rm',4)">Projection</th><th class="r" onclick="srt('t-sum-rm',5)">Proj%</th><th class="r" onclick="srt('t-sum-rm',6)">AOP Target</th><th class="r" onclick="srt('t-sum-rm',7)">AOP Ach%</th>
+    <th onclick="srt('t-sum-rm',0)">RM</th><th class="r" onclick="srt('t-sum-rm',1)">Main Target</th><th class="r" onclick="srt('t-sum-rm',2)">MTD Sales</th><th class="r" onclick="srt('t-sum-rm',3)">Ach%</th><th class="r" onclick="srt('t-sum-rm',4)">Projection</th><th class="r" onclick="srt('t-sum-rm',5)">Proj%</th><th class="r" onclick="srt('t-sum-rm',6)">AOP Target</th><th class="r" onclick="srt('t-sum-rm',7)">AOP Ach%</th><th class="r" onclick="srt('t-sum-rm',8)">AOP Proj%</th>
   </tr></thead><tbody id="b-sum-rm"></tbody></table></div>
 
   <div class="sh"><span class="sh-t" id="sum-cm-title">CM — Target vs Achievement</span><div class="sh-l"></div><button class="dl" onclick="dlT('t-sum-cm','CM-Summary')">&#8595; CSV</button></div>
   <div class="tw"><table id="t-sum-cm"><thead><tr>
-    <th onclick="srt('t-sum-cm',0)">CM</th><th class="r" onclick="srt('t-sum-cm',1)">Main Target</th><th class="r" onclick="srt('t-sum-cm',2)">MTD Sales</th><th class="r" onclick="srt('t-sum-cm',3)">Ach%</th><th class="r" onclick="srt('t-sum-cm',4)">Projection</th><th class="r" onclick="srt('t-sum-cm',5)">Proj%</th><th class="r" onclick="srt('t-sum-cm',6)">AOP Target</th><th class="r" onclick="srt('t-sum-cm',7)">AOP Ach%</th>
+    <th onclick="srt('t-sum-cm',0)">CM</th><th class="r" onclick="srt('t-sum-cm',1)">Main Target</th><th class="r" onclick="srt('t-sum-cm',2)">MTD Sales</th><th class="r" onclick="srt('t-sum-cm',3)">Ach%</th><th class="r" onclick="srt('t-sum-cm',4)">Projection</th><th class="r" onclick="srt('t-sum-cm',5)">Proj%</th><th class="r" onclick="srt('t-sum-cm',6)">AOP Target</th><th class="r" onclick="srt('t-sum-cm',7)">AOP Ach%</th><th class="r" onclick="srt('t-sum-cm',8)">AOP Proj%</th>
   </tr></thead><tbody id="b-sum-cm"></tbody></table></div>
 </div>
 
@@ -1039,6 +1039,7 @@ function renderSummary(){
       var ap=g.main?Math.round(g.sales/g.main*100):0;
       var pp=g.main?Math.round(g.proj/g.main*100):0;
       var aopP=g.aop?Math.round(g.sales/g.aop*100):0;
+      var aopPp=g.aop?Math.round(g.proj/g.aop*100):0;
       return'<tr>'+
         '<td style="font-weight:700;color:#3b82f6;cursor:pointer;" onclick="filterBy(\''+key+'\',\''+nm+'\')">'+nm+'</td>'+
         '<td class="r">'+L(g.main)+'</td>'+
@@ -1048,17 +1049,19 @@ function renderSummary(){
         '<td class="r '+(g.proj?pc(pp):'')+'">'+(g.proj?pp+'%':'—')+'</td>'+
         '<td class="r">'+(g.aop?L(g.aop):'—')+'</td>'+
         '<td class="r '+(g.aop?pc(aopP):'')+'">'+(g.aop?aopP+'%':'—')+'</td>'+
+        '<td class="r '+(g.aop?pc(aopPp):'')+'">'+(g.aop?aopPp+'%':'—')+'</td>'+
       '</tr>';
     }).join('');
-    var tAp=tM?Math.round(tS/tM*100):0,tPp=tM?Math.round(tP/tM*100):0,tAopP=tA?Math.round(tS/tA*100):0;
+    var tAp=tM?Math.round(tS/tM*100):0,tPp=tM?Math.round(tP/tM*100):0,tAopP=tA?Math.round(tS/tA*100):0,tAopPp=tA?Math.round(tP/tA*100):0;
     html+='<tr class="ft"><td>Total ('+rows.length+')</td>'+
       '<td class="r">'+L(tM)+'</td><td class="r">'+L(tS)+'</td>'+
       '<td class="r '+pc(tAp)+'">'+tAp+'%</td>'+
       '<td class="r">'+(tP?L(tP):'—')+'</td>'+
       '<td class="r '+(tP?pc(tPp):'')+'">'+(tP?tPp+'%':'—')+'</td>'+
       '<td class="r">'+(tA?L(tA):'—')+'</td>'+
-      '<td class="r '+(tA?pc(tAopP):'')+'">'+(tA?tAopP+'%':'—')+'</td></tr>';
-    el.innerHTML=html||'<tr><td colspan="8" style="text-align:center;color:#9ca3af;padding:18px;">No data — connect and Load a month.</td></tr>';
+      '<td class="r '+(tA?pc(tAopP):'')+'">'+(tA?tAopP+'%':'—')+'</td>'+
+      '<td class="r '+(tA?pc(tAopPp):'')+'">'+(tA?tAopPp+'%':'—')+'</td></tr>';
+    el.innerHTML=html||'<tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:18px;">No data — connect and Load a month.</td></tr>';
   });
   var lbl=selMonths.length>1?('Combined '+selMonths.join('+')):(activeSheet||'');
   var ttl='Target vs Achievement · '+lbl;
