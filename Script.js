@@ -221,6 +221,8 @@ function getMonthly(monthName) {
       daysCount: daysWithData,
       daySales: daySales,
       dayBills: dayBills,
+      dayWalkIns: dayWalkIns,
+      dayQty: dayQty,
       kpiTargets: {
         sales: tgtSales,
         bills: tgtBills,

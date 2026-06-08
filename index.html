@@ -338,6 +338,15 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
 
 <!-- DAY-WISE -->
 <div class="panel" id="panel-daywise">
+  <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+    <span style="font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">KPI:</span>
+    <button id="dm-sales" class="wkbtn active" onclick="setDayMetric('sales')">Sales</button>
+    <button id="dm-walkins" class="wkbtn" onclick="setDayMetric('walkins')">Walk-ins</button>
+    <button id="dm-bills" class="wkbtn" onclick="setDayMetric('bills')">Bills</button>
+    <button id="dm-conversion" class="wkbtn" onclick="setDayMetric('conversion')">Conv%</button>
+    <button id="dm-abv" class="wkbtn" onclick="setDayMetric('abv')">ABV</button>
+    <button id="dm-upt" class="wkbtn" onclick="setDayMetric('upt')">UPT</button>
+  </div>
   <div class="sh"><span class="sh-t" id="day-title">Day-wise Sales</span><div class="sh-l"></div><button class="dl" onclick="dlT('t-day','Daywise')">&#8595; CSV</button></div>
   <div class="tw"><table id="t-day"><thead id="day-thead"></thead><tbody id="b-day"></tbody></table></div>
 </div>
@@ -1284,21 +1293,103 @@ function renderStores(){
 // ═══════════════════════════════════════════
 // DAY-WISE
 // ═══════════════════════════════════════════
+var DAY_METRIC='sales';
+function setDayMetric(m){
+  DAY_METRIC=m;
+  ['sales','walkins','bills','conversion','abv','upt'].forEach(function(k){var b=document.getElementById('dm-'+k);if(b)b.classList.toggle('active',k===m);});
+  renderDaywise();
+}
+// Per-day raw figures for a store. Walk-ins/Qty use real arrays if the Apps Script
+// sends them; otherwise they're approximated by that day's share of sales.
+function dayRaw(s,i){
+  var ds=s.daySales||[],db=s.dayBills||[],dw=s.dayWalkIns,dq=s.dayQty;
+  var sa=ds[i]||0,bi=db[i]||0;
+  var wi=dw?(dw[i]||0):(s.mtdSales?Math.round((s.mtdWalkIns||0)*(sa/s.mtdSales)):0);
+  var qi=dq?(dq[i]||0):(s.mtdSales?Math.round((s.mtdSoldQty||0)*(sa/s.mtdSales)):0);
+  return {sa:sa,bi:bi,wi:wi,qi:qi};
+}
+function dayMetricVal(r){
+  switch(DAY_METRIC){
+    case 'sales': return r.sa;
+    case 'bills': return r.bi;
+    case 'walkins': return r.wi;
+    case 'conversion': return r.wi?Math.round(r.bi/r.wi*1000)/10:0;
+    case 'abv': return r.bi?Math.round(r.sa/r.bi):0;
+    case 'upt': return r.bi?Math.round(r.qi/r.bi*100)/100:0;
+  }
+  return 0;
+}
+function dayFmt(v){
+  if(!v&&v!==0)return'—';
+  if(DAY_METRIC==='sales'||DAY_METRIC==='abv')return L(v);
+  if(DAY_METRIC==='conversion')return v+'%';
+  if(DAY_METRIC==='upt')return v.toFixed(2);
+  return N(v);
+}
+function dayIsRate(){return DAY_METRIC==='conversion'||DAY_METRIC==='abv'||DAY_METRIC==='upt';}
+// Daily target (count metrics: monthly target ÷ days; rate metrics: the rate target)
+function dayTgt(s){
+  var kt=s.kpiTargets||{};
+  switch(DAY_METRIC){
+    case 'sales': return s.target/totalDays;
+    case 'bills': return (kt.bills||0)/totalDays;
+    case 'walkins': return (kt.walkIns||0)/totalDays;
+    case 'conversion': return kt.conversion||0;
+    case 'abv': return kt.abv||0;
+    case 'upt': return kt.upt||0;
+  }
+  return 0;
+}
+function dayMTD(s){
+  switch(DAY_METRIC){
+    case 'sales': return s.mtdSales;
+    case 'bills': return s.mtdBills;
+    case 'walkins': return s.mtdWalkIns;
+    case 'conversion': return s.convActual||0;
+    case 'abv': return s.abv||0;
+    case 'upt': return s.upt||0;
+  }
+  return 0;
+}
+function dayTgtCell(s){
+  var kt=s.kpiTargets||{};
+  switch(DAY_METRIC){
+    case 'sales': return L(s.target);
+    case 'bills': return kt.bills?N(kt.bills):'—';
+    case 'walkins': return kt.walkIns?N(kt.walkIns):'—';
+    case 'conversion': return convTgt(kt.conversion);
+    case 'abv': return kt.abv?LA(kt.abv):'—';
+    case 'upt': return kt.upt?kt.upt.toFixed(2):'—';
+  }
+  return '—';
+}
+var DAY_LABELS={sales:'Sales',walkins:'Walk-ins',bills:'Bills',conversion:'Conversion%',abv:'ABV',upt:'UPT'};
+function dayFootTgt(){
+  if(dayIsRate())return '—';
+  var sum=filtered.reduce(function(a,s){var kt=s.kpiTargets||{};
+    if(DAY_METRIC==='sales')return a+(s.target||0);
+    if(DAY_METRIC==='bills')return a+(kt.bills||0);
+    if(DAY_METRIC==='walkins')return a+(kt.walkIns||0);
+    return a;},0);
+  return DAY_METRIC==='sales'?L(sum):N(sum);
+}
 function renderDaywise(){
   var el=document.getElementById('day-thead');
   if(!labels.length){el.innerHTML='';document.getElementById('b-day').innerHTML=nd(5,'No data');return;}
-  document.getElementById('day-title').textContent='Day-wise — '+labels[0]+(labels.length>1?' to '+labels[labels.length-1]:'');
+  document.getElementById('day-title').textContent='Day-wise '+DAY_LABELS[DAY_METRIC]+' — '+labels[0]+(labels.length>1?' to '+labels[labels.length-1]:'');
+  var rate=dayIsRate();
   el.innerHTML='<tr><th style="position:sticky;left:0;background:#f9fafb;z-index:2;">Store</th><th style="position:sticky;left:72px;background:#f9fafb;z-index:2;">RM</th><th class="r">Target</th>'+labels.map(function(l,i){return'<th class="r" style="min-width:66px;" onclick="srt(\'t-day\','+(i+3)+')">'+l+'</th>';}).join('')+'<th class="r" style="background:#dbeafe;">MTD</th></tr>';
-  var tots=labels.map(function(_,i){return filtered.reduce(function(a,s){return a+((s.daySales&&s.daySales[i])||0);},0);});
+  // per-day column totals (sum the raw numerator/denominator so rate totals are correct)
+  var colT=labels.map(function(_,i){var t={sa:0,bi:0,wi:0,qi:0};filtered.forEach(function(s){var r=dayRaw(s,i);t.sa+=r.sa;t.bi+=r.bi;t.wi+=r.wi;t.qi+=r.qi;});return t;});
   document.getElementById('b-day').innerHTML=filtered.map(function(s){
-    var ds=s.daySales||[],dTgt=Math.round(s.target/totalDays);
+    var tg=dayTgt(s);
     return'<tr><td style="font-weight:700;color:#3b82f6;cursor:pointer;position:sticky;left:0;background:#fff;" onclick="openDrill(\''+s.code+'\')">'+s.code+'</td>'+
       '<td style="font-size:11px;color:#6b7280;position:sticky;left:72px;background:#fff;">'+s.rm+'</td>'+
-      '<td class="r">'+L(s.target)+'</td>'+
-      labels.map(function(_,i){var v=ds[i]||0;if(!v)return'<td class="r" style="color:#9ca3af;">—</td>';var p=dTgt?Math.round(v/dTgt*100):100;return'<td class="r" style="color:'+(p<100?'#dc2626':'#16a34a')+';font-size:11px;">'+L(v)+'</td>';}).join('')+
-      '<td class="r" style="font-weight:700;background:#dbeafe;">'+L(ds.reduce(function(a,b){return a+b;},0))+'</td></tr>';
+      '<td class="r">'+dayTgtCell(s)+'</td>'+
+      labels.map(function(_,i){var v=dayMetricVal(dayRaw(s,i));if(!v)return'<td class="r" style="color:#9ca3af;">—</td>';var p=tg?Math.round(v/tg*100):100;return'<td class="r" style="color:'+(p<100?'#dc2626':'#16a34a')+';font-size:11px;">'+dayFmt(v)+'</td>';}).join('')+
+      '<td class="r" style="font-weight:700;background:#dbeafe;">'+dayFmt(dayMTD(s))+'</td></tr>';
   }).join('')+
-  '<tr class="ft"><td style="position:sticky;left:0;background:#f9fafb;">Total</td><td style="position:sticky;left:72px;background:#f9fafb;"></td><td class="r">'+L(filtered.reduce(function(a,s){return a+s.target;},0))+'</td>'+tots.map(function(v){return'<td class="r">'+(v?L(v):'—')+'</td>';}).join('')+'<td class="r" style="background:#bfdbfe;">'+L(tots.reduce(function(a,b){return a+b;},0))+'</td></tr>';
+  '<tr class="ft"><td style="position:sticky;left:0;background:#f9fafb;">Total</td><td style="position:sticky;left:72px;background:#f9fafb;"></td><td class="r">'+dayFootTgt()+'</td>'+colT.map(function(t){var v=dayMetricVal(t);return'<td class="r">'+(v?dayFmt(v):'—')+'</td>';}).join('')+'<td class="r" style="background:#bfdbfe;">'+dayFmt(dayMetricVal({sa:colT.reduce(function(a,t){return a+t.sa;},0),bi:colT.reduce(function(a,t){return a+t.bi;},0),wi:colT.reduce(function(a,t){return a+t.wi;},0),qi:colT.reduce(function(a,t){return a+t.qi;},0)}))+'</td></tr>';
 }
 
 // ═══════════════════════════════════════════
