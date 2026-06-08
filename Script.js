@@ -171,9 +171,12 @@ function getMonthly(monthName) {
     var mtdWalkIns = arrSum(dayWalkIns);
     var daysWithData = daySales.filter(function(v){ return v > 0; }).length || 1;
 
+    // Real monthly targets are in the lakhs; a sub-1000 value is a broken source
+    // cell (#REF! → 0, or a stray fraction like 0.35) → treat as "no target".
+    if (tgtSales > 0 && tgtSales < 1000) tgtSales = 0;
     var projTotal   = Math.round(mtdSales / daysWithData * totalDays);
-    var pct         = tgtSales > 0 ? Math.round(mtdSales / tgtSales * 100) : 0;
-    var trendingPct = tgtSales > 0 ? Math.round(projTotal / tgtSales * 100) : 0;
+    var pct         = tgtSales >= 1000 ? Math.round(mtdSales / tgtSales * 100) : 0;
+    var trendingPct = tgtSales >= 1000 ? Math.round(projTotal / tgtSales * 100) : 0;
     var convActual  = mtdWalkIns > 0 ? Math.round(mtdBills / mtdWalkIns * 1000) / 10 : 0;
     var abv         = mtdBills > 0 ? Math.round(mtdSales / mtdBills) : 0;
     var upt         = mtdBills > 0 ? Math.round(mtdQty / mtdBills * 100) / 100 : 0;
