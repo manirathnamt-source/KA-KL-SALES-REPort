@@ -268,6 +268,7 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <label>RM</label><select id="sel-rm" onchange="applyFilter()"><option value="">All</option></select>
   <label>CM</label><select id="sel-cm" onchange="applyFilter()"><option value="">All</option></select>
   <label>City</label><select id="sel-city" onchange="applyFilter()"><option value="">All</option></select>
+  <label>Market</label><select id="sel-market" onchange="applyFilter()"><option value="">All</option></select>
   <label>Quarter</label>
   <select id="sel-qtr" onchange="applyFilter()">
     <option value="">All</option>
@@ -832,6 +833,8 @@ function LA(n){if(!n&&n!==0)return'—';var a=Math.abs(n);return a>=1e3?'₹'+(n
 // Conversion-target sanity: a real conversion rate is 0–100%. Anything outside
 // that is a broken/mis-read source cell (e.g. a sales figure) → show "—".
 function convTgt(v){return(v>0&&v<=100)?(Math.round(v*10)/10)+'%':'—';}
+// Market = city prefix of the store name ("BLR - JAYNAGAR" -> BLR); fallback to code prefix
+function mkt(s){var n=((s&&s.name)||'').trim();var i=n.indexOf(' - ');if(i>0)return n.slice(0,i).trim().toUpperCase();var c=((s&&s.code)||'').toUpperCase();var m=c.match(/^[A-Z]+/);return m?m[0].slice(0,3):'';}
 function pc(p){return p>=100?'gv':p>=85?'av':'rv';}
 
 // ═══════════════════════════════════════════
@@ -991,11 +994,13 @@ function buildFilters(sheets){
   fill('sel-rm',[...new Set(raw.map(function(s){return s.rm;}))].filter(Boolean).sort());
   fill('sel-cm',[...new Set(raw.map(function(s){return s.cm;}))].filter(Boolean).sort());
   fill('sel-city',[...new Set(raw.map(function(s){return s.city;}))].filter(Boolean).sort());
+  fill('sel-market',[...new Set(raw.map(mkt))].filter(Boolean).sort());
   renderMonthPicker(sheets);
 }
 function fill(id,arr){var el=document.getElementById(id),v=el.value;el.innerHTML='<option value="">All</option>'+arr.map(function(a){return'<option value="'+a+'"'+(a===v?' selected':'')+'>'+a+'</option>';}).join('');}
 function applyFilter(){
   var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value;
+  var mkEl=document.getElementById('sel-market');var mk=mkEl?mkEl.value:'';
   var qtrEl=document.getElementById('sel-qtr');
   var qtr=qtrEl?qtrEl.value:'';
   var qtrMonths={Q1:['APR','MAY','JUN'],Q2:['JUL','AUG','SEP'],Q3:['OCT','NOV','DEC'],Q4:['JAN','FEB','MAR']};
@@ -1003,14 +1008,14 @@ function applyFilter(){
   filtered=raw.filter(function(s){
     var name=(s.name||s.code||'').toUpperCase();
     if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;
-    return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy);
+    return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk);
   });
   document.getElementById('fbadge').textContent=filtered.length+' stores · '+labels.length+'d · '+activeSheet;
   renderAll();
   // Sync category tab if loaded
   if(catData) renderCat();
 }
-function resetFilter(){['sel-rm','sel-cm','sel-city','sel-qtr'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});applyFilter();}
+function resetFilter(){['sel-rm','sel-cm','sel-city','sel-market','sel-qtr'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});applyFilter();}
 
 // ═══════════════════════════════════════════
 // RENDER ALL
@@ -1030,7 +1035,8 @@ function renderAll(){
 function summaryEntries(){
   if(selMonths.length<=1) return filtered.map(function(s){return{s:s,m:activeSheet};});
   var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value;
-  var pred=function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy);};
+  var mkEl=document.getElementById('sel-market');var mk=mkEl?mkEl.value:'';
+  var pred=function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk);};
   var out=[];
   selMonths.forEach(function(m){
     var arr=(m===activeSheet?raw:monthCache[m])||[];
