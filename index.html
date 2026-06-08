@@ -1299,23 +1299,21 @@ function setDayMetric(m){
   ['sales','walkins','bills','conversion','abv','upt'].forEach(function(k){var b=document.getElementById('dm-'+k);if(b)b.classList.toggle('active',k===m);});
   renderDaywise();
 }
-// Per-day raw figures for a store. Walk-ins/Qty use real arrays if the Apps Script
-// sends them; otherwise they're approximated by that day's share of sales.
+// Per-day raw figures for a store. Walk-ins/Qty come ONLY from the real per-day
+// arrays the Apps Script sends. If those arrays aren't present (old deployment),
+// wi/qi are null so the cell shows "—" — never a fabricated/estimated number.
 function dayRaw(s,i){
   var ds=s.daySales||[],db=s.dayBills||[],dw=s.dayWalkIns,dq=s.dayQty;
-  var sa=ds[i]||0,bi=db[i]||0;
-  var wi=dw?(dw[i]||0):(s.mtdSales?Math.round((s.mtdWalkIns||0)*(sa/s.mtdSales)):0);
-  var qi=dq?(dq[i]||0):(s.mtdSales?Math.round((s.mtdSoldQty||0)*(sa/s.mtdSales)):0);
-  return {sa:sa,bi:bi,wi:wi,qi:qi};
+  return {sa:ds[i]||0, bi:db[i]||0, wi:dw?(dw[i]||0):null, qi:dq?(dq[i]||0):null};
 }
 function dayMetricVal(r){
   switch(DAY_METRIC){
     case 'sales': return r.sa;
     case 'bills': return r.bi;
-    case 'walkins': return r.wi;
-    case 'conversion': return r.wi?Math.round(r.bi/r.wi*1000)/10:0;
+    case 'walkins': return r.wi;                                            // null if no daily data
+    case 'conversion': return r.wi==null?null:(r.wi?Math.round(r.bi/r.wi*1000)/10:0);
     case 'abv': return r.bi?Math.round(r.sa/r.bi):0;
-    case 'upt': return r.bi?Math.round(r.qi/r.bi*100)/100:0;
+    case 'upt': return r.qi==null?null:(r.bi?Math.round(r.qi/r.bi*100)/100:0);
   }
   return 0;
 }
@@ -1376,11 +1374,14 @@ function dayFootTgt(){
 function renderDaywise(){
   var el=document.getElementById('day-thead');
   if(!labels.length){el.innerHTML='';document.getElementById('b-day').innerHTML=nd(5,'No data');return;}
-  document.getElementById('day-title').textContent='Day-wise '+DAY_LABELS[DAY_METRIC]+' — '+labels[0]+(labels.length>1?' to '+labels[labels.length-1]:'');
+  var needsW=(DAY_METRIC==='walkins'||DAY_METRIC==='conversion'),needsQ=(DAY_METRIC==='upt');
+  var hasW=filtered.some(function(s){return s.dayWalkIns;}),hasQ=filtered.some(function(s){return s.dayQty;});
+  var missingDaily=(needsW&&!hasW)||(needsQ&&!hasQ);
+  document.getElementById('day-title').textContent='Day-wise '+DAY_LABELS[DAY_METRIC]+' — '+labels[0]+(labels.length>1?' to '+labels[labels.length-1]:'')+(missingDaily?'  ·  daily figures not in data feed (redeploy Apps Script)':'');
   var rate=dayIsRate();
   el.innerHTML='<tr><th style="position:sticky;left:0;background:#f9fafb;z-index:2;">Store</th><th style="position:sticky;left:72px;background:#f9fafb;z-index:2;">RM</th><th class="r">Target</th>'+labels.map(function(l,i){return'<th class="r" style="min-width:66px;" onclick="srt(\'t-day\','+(i+3)+')">'+l+'</th>';}).join('')+'<th class="r" style="background:#dbeafe;">MTD</th></tr>';
   // per-day column totals (sum the raw numerator/denominator so rate totals are correct)
-  var colT=labels.map(function(_,i){var t={sa:0,bi:0,wi:0,qi:0};filtered.forEach(function(s){var r=dayRaw(s,i);t.sa+=r.sa;t.bi+=r.bi;t.wi+=r.wi;t.qi+=r.qi;});return t;});
+  var colT=labels.map(function(_,i){var t={sa:0,bi:0,wi:0,qi:0};filtered.forEach(function(s){var r=dayRaw(s,i);t.sa+=r.sa;t.bi+=r.bi;t.wi+=(r.wi||0);t.qi+=(r.qi||0);});return t;});
   document.getElementById('b-day').innerHTML=filtered.map(function(s){
     var tg=dayTgt(s);
     return'<tr><td style="font-weight:700;color:#3b82f6;cursor:pointer;position:sticky;left:0;background:#fff;" onclick="openDrill(\''+s.code+'\')">'+s.code+'</td>'+
