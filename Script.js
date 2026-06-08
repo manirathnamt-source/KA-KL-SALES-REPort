@@ -126,6 +126,26 @@ function getMonthly(monthName) {
 
   Logger.log('Day cols found: ' + dayLabels.length + ' starting at col ' + (dayStartCols[0]+1));
 
+  // ── Detect TARGET columns by sub-header label (robust to inserted columns) ──
+  // MAY layout: Sales|Conversion|ABV|Walk-ins|UPT  (cols 4-8)
+  // JUN layout: Sales Target|Bill Target|Conversion Target|ABV Target|Walk-ins Target|UPT Target (cols 4-9)
+  // Reading fixed positions breaks when a column (e.g. "Bill Target") is inserted,
+  // so map each target to the column whose sub-header label matches.
+  var subHeader  = allData[headerRowIdx + 1] || [];
+  var firstDayCol = dayStartCols.length ? dayStartCols[0] : 9;
+  function findTgtCol(rx, fallback) {
+    for (var c = 4; c < firstDayCol; c++) {
+      if (rx.test(String(subHeader[c] || '').trim())) return c;
+    }
+    return fallback;
+  }
+  var colSales = findTgtCol(/sales/i, 4);
+  var colConv  = findTgtCol(/conversion|conv/i, 5);
+  var colABV   = findTgtCol(/abv/i, 6);
+  var colWalk  = findTgtCol(/walk/i, 7);
+  var colUPT   = findTgtCol(/upt/i, 8);
+  Logger.log('Target cols -> sales:'+colSales+' conv:'+colConv+' abv:'+colABV+' walk:'+colWalk+' upt:'+colUPT);
+
   // ── Parse stores ──
   var stores = [];
   for (var r3 = firstDataRow; r3 < allData.length; r3++) {
@@ -146,12 +166,12 @@ function getMonthly(monthName) {
     var rm = String(row[2] || '').trim();
     var cm = String(row[3] || '').trim();
 
-    // Targets: idx 4=SalesTarget, 5=Conv%, 6=ABV, 7=WalkIns, 8=UPT
-    var tgtSales   = numVal(row[4]);
-    var tgtConv    = pctVal(row[5]);  // "53%" or 0.53
-    var tgtABV     = numVal(row[6]);
-    var tgtWalkIns = numVal(row[7]);
-    var tgtUPT     = pctVal(row[8]);
+    // Targets: columns detected by sub-header label (see findTgtCol above)
+    var tgtSales   = numVal(row[colSales]);
+    var tgtConv    = pctVal(row[colConv]);  // "53%" or 0.53
+    var tgtABV     = numVal(row[colABV]);
+    var tgtWalkIns = numVal(row[colWalk]);
+    var tgtUPT     = pctVal(row[colUPT]);
     var tgtBills   = tgtWalkIns > 0 && tgtConv > 0 ? Math.round(tgtWalkIns * tgtConv / 100) : 0;
 
     // Day-wise data
