@@ -831,6 +831,7 @@ var catData=null;
 var ALL_MONTHS=['APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB','MAR'];
 var selMonths=['APR'];   // checked months; selMonths[0] is the primary month driving single-month tabs
 var monthCache={};        // month -> stores array, for multi-month Summary combine
+var prevFetching={};      // guards background fetch of previous month (Weekly continuous compare)
 
 // ═══════════════════════════════════════════
 // FORMAT
@@ -1437,30 +1438,45 @@ function renderWK(kpi){
   var fns={sales:wSal,bills:wBil,walkIns:wWlk,conversion:wConv,abv:wABV,upt:wUPT};
   var fmts={sales:L,bills:N,walkIns:N,conversion:function(v){return v?v.toFixed(1)+'%':'—';},abv:function(v){return v?L(v):'—';},upt:function(v){return v?parseFloat(v).toFixed(2):'—';}};
   var lbls={sales:'Sales',bills:'Bills',walkIns:'Walk-ins',conversion:'Conversion%',abv:'ABV',upt:'UPT'};
-  document.getElementById('wk-title').textContent='Week-over-Week — '+lbls[kpi];
   var fn=fns[kpi]||wSal,fm=fmts[kpi]||L;
   var isRate=['conversion','abv','upt'].indexOf(kpi)>=0;
-  var rWks=weeks.map(function(w){
-    var fi=w[0],ti=w[1];
+  // Region aggregate value for a store list over a day range (rate metrics aggregate, counts sum)
+  function regionVal(list,fi,ti){
     if(isRate){var ts2=0,tb=0,tw=0,tq=0;
-      filtered.forEach(function(s){ts2+=wSal(s,fi,ti);tb+=wBil(s,fi,ti);tw+=wWlk(s,fi,ti);var tot=wSal(s,0,99);if(tot&&s.mtdSoldQty)tq+=Math.round(s.mtdSoldQty*wSal(s,fi,ti)/(tot||1));});
+      list.forEach(function(s){ts2+=wSal(s,fi,ti);tb+=wBil(s,fi,ti);tw+=wWlk(s,fi,ti);var tot=wSal(s,0,99);if(tot&&s.mtdSoldQty)tq+=Math.round(s.mtdSoldQty*wSal(s,fi,ti)/(tot||1));});
       if(kpi==='conversion')return tw?Math.round(tb/tw*1000)/10:0;
       if(kpi==='abv')return tb?Math.round(ts2/tb):0;
       if(kpi==='upt')return tb?Math.round(tq/tb*100)/100:0;return 0;}
-    return filtered.reduce(function(a,s){return a+fn(s,fi,ti);},0);
-  });
+    return list.reduce(function(a,s){return a+fn(s,fi,ti);},0);
+  }
+  // Continuous comparison: current month's W1 vs the PREVIOUS month's last week (W4).
+  var pIdx=ALL_MONTHS.indexOf(activeSheet)-1;
+  var prevMonth=pIdx>=0?ALL_MONTHS[pIdx]:null;
+  var prevStores=prevMonth?monthCache[prevMonth]:null;
+  if(prevMonth&&!prevStores&&activeURL&&!prevFetching[prevMonth]){   // fetch once, then re-render
+    prevFetching[prevMonth]=true;
+    jfetch(activeURL,prevMonth).then(function(d){prevFetching[prevMonth]=false;if(d&&d.stores){monthCache[prevMonth]=d.stores;if(activeWK===kpi)renderWK(kpi);}}).catch(function(){prevFetching[prevMonth]=false;});
+  }
+  var prevByCode={};if(prevStores)prevStores.forEach(function(s){prevByCode[s.code]=s;});
+  function prevLW(s){var ps=prevByCode[s.code];return ps?fn(ps,21,99):null;}  // previous month's last week
+  var filteredPrev=prevStores?filtered.map(function(s){return prevByCode[s.code];}).filter(Boolean):[];
+  var rPrev=prevStores?regionVal(filteredPrev,21,99):null;
+  var prevLbl=prevMonth||'Prev';
+  document.getElementById('wk-title').textContent='Week-over-Week — '+lbls[kpi]+(prevMonth?'  ·  W1 vs '+prevMonth+' last week':'');
+  var rWks=weeks.map(function(w){return regionVal(filtered,w[0],w[1]);});
   document.getElementById('wk-cards').innerHTML=rWks.map(function(v,i){
-    var prev=i>0?rWks[i-1]:null;var chg=prev&&prev>0?Math.round((v-prev)/prev*100):null;
-    return'<div class="kc"><div class="kl">'+wl[i]+'</div><div class="kv">'+(v>0?fm(v):'—')+'</div><div class="ks">'+(chg!==null?(chg>=0?'<span class="gv">+'+chg+'%</span>':'<span class="rv">'+chg+'%</span>'):'Baseline')+'</div></div>';
+    var prev=i>0?rWks[i-1]:rPrev;var chg=(prev!=null&&prev>0)?Math.round((v-prev)/prev*100):null;
+    var sub=chg!==null?(chg>=0?'<span class="gv">+'+chg+'%</span>':'<span class="rv">'+chg+'%</span>'):(i===0?(prevMonth?'vs '+prevMonth+' n/a':'Baseline'):'Baseline');
+    return'<div class="kc"><div class="kl">'+wl[i]+'</div><div class="kv">'+(v>0?fm(v):'—')+'</div><div class="ks">'+sub+'</div></div>';
   }).join('');
-  function chgCell(a,b){if(!a)return'<span style="color:#9ca3af;">—</span>';var p=Math.round((b-a)/a*100);return'<span class="'+(p>0?'gv':p<0?'rv':'')+'">'+(p>=0?'+':'')+p+'%</span>';}
-  document.getElementById('wk-thead').innerHTML='<tr><th onclick="srt(\'t-wk\',0)">Store</th><th onclick="srt(\'t-wk\',1)">RM</th>'+wl.map(function(l,i){return'<th class="r" onclick="srt(\'t-wk\','+(i+2)+')">'+l+'</th>';}).join('')+'<th class="r">W2vW1</th><th class="r">W3vW2</th><th class="r">W4vW3</th><th class="r">MTD</th></tr>';
+  function chgCell(a,b){if(a==null||!a)return'<span style="color:#9ca3af;">—</span>';var p=Math.round((b-a)/a*100);return'<span class="'+(p>0?'gv':p<0?'rv':'')+'">'+(p>=0?'+':'')+p+'%</span>';}
+  document.getElementById('wk-thead').innerHTML='<tr><th onclick="srt(\'t-wk\',0)">Store</th><th onclick="srt(\'t-wk\',1)">RM</th>'+wl.map(function(l,i){return'<th class="r" onclick="srt(\'t-wk\','+(i+2)+')">'+l+'</th>';}).join('')+'<th class="r">W1 v '+prevLbl+'</th><th class="r">W2vW1</th><th class="r">W3vW2</th><th class="r">W4vW3</th><th class="r">MTD</th></tr>';
   document.getElementById('b-wk').innerHTML=filtered.map(function(s){
     var ws=weeks.map(function(w){return fn(s,w[0],w[1]);});
     var mtd=ws.reduce(function(a,b){return a+b;},0);
-    return'<tr style="cursor:pointer;" onclick="openDrill(\''+s.code+'\')"><td style="font-weight:700;color:#3b82f6;">'+s.code+'</td><td>'+s.rm+'</td>'+ws.map(function(v){return'<td class="r">'+(v>0?fm(v):'—')+'</td>';}).join('')+'<td class="r">'+chgCell(ws[0],ws[1])+'</td><td class="r">'+chgCell(ws[1],ws[2])+'</td><td class="r">'+chgCell(ws[2],ws[3])+'</td><td class="r" style="font-weight:700;">'+(mtd>0?fm(mtd):'—')+'</td></tr>';
+    return'<tr style="cursor:pointer;" onclick="openDrill(\''+s.code+'\')"><td style="font-weight:700;color:#3b82f6;">'+s.code+'</td><td>'+s.rm+'</td>'+ws.map(function(v){return'<td class="r">'+(v>0?fm(v):'—')+'</td>';}).join('')+'<td class="r">'+chgCell(prevLW(s),ws[0])+'</td><td class="r">'+chgCell(ws[0],ws[1])+'</td><td class="r">'+chgCell(ws[1],ws[2])+'</td><td class="r">'+chgCell(ws[2],ws[3])+'</td><td class="r" style="font-weight:700;">'+(mtd>0?fm(mtd):'—')+'</td></tr>';
   }).join('')+
-  '<tr class="ft"><td colspan="2">Region</td>'+rWks.map(function(v){return'<td class="r">'+(v>0?fm(v):'—')+'</td>';}).join('')+'<td class="r">'+chgCell(rWks[0],rWks[1])+'</td><td class="r">'+chgCell(rWks[1],rWks[2])+'</td><td class="r">'+chgCell(rWks[2],rWks[3])+'</td><td class="r">'+fm(rWks.reduce(function(a,b){return a+b;},0))+'</td></tr>'||nd(10);
+  '<tr class="ft"><td colspan="2">Region</td>'+rWks.map(function(v){return'<td class="r">'+(v>0?fm(v):'—')+'</td>';}).join('')+'<td class="r">'+chgCell(rPrev,rWks[0])+'</td><td class="r">'+chgCell(rWks[0],rWks[1])+'</td><td class="r">'+chgCell(rWks[1],rWks[2])+'</td><td class="r">'+chgCell(rWks[2],rWks[3])+'</td><td class="r">'+fm(rWks.reduce(function(a,b){return a+b;},0))+'</td></tr>'||nd(10);
 }
 
 // ═══════════════════════════════════════════
