@@ -295,6 +295,7 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <div class="tab" onclick="showTab('daywise',this)">&#128197; Day-wise</div>
   <div class="tab" onclick="showTab('mtd',this)">&#128202; MTD</div>
   <div class="tab" onclick="showTab('weekly',this)">&#128198; Weekly</div>
+  <div class="tab" onclick="showTab('l2l',this)">&#128200; L2L</div>
     <div class="tab" onclick="showTab('ytd',this)">&#128337; YTD</div>
 <div class="tab warn" onclick="showTab('kpialerts',this)">&#9888; KPI Alerts</div>
   <div class="tab danger" onclick="showTab('audit',this)">&#128270; Audit</div>
@@ -375,6 +376,15 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <div class="krow" id="wk-cards"></div>
   <div class="sh"><span class="sh-t" id="wk-title">Week-over-Week</span><div class="sh-l"></div></div>
   <div class="tw"><table id="t-wk"><thead id="wk-thead"></thead><tbody id="b-wk"></tbody></table></div>
+</div>
+
+<!-- L2L (Like-for-Like vs FY25-26) -->
+<div class="panel" id="panel-l2l">
+  <div class="krow" id="l2l-cards"></div>
+  <div class="sh"><span class="sh-t" id="l2l-title">Like-for-Like</span><div class="sh-l"></div><button class="dl" onclick="dlT('t-l2l','L2L')">&#8595; CSV</button></div>
+  <div class="tw"><table id="t-l2l"><thead><tr>
+    <th onclick="srt('t-l2l',0)">Store</th><th onclick="srt('t-l2l',1)">RM</th><th onclick="srt('t-l2l',2)">Market</th><th class="r" onclick="srt('t-l2l',3)">This Yr (LfL)</th><th class="r" onclick="srt('t-l2l',4)">Last Yr (LfL)</th><th class="r" onclick="srt('t-l2l',5)">Diff</th><th class="r" onclick="srt('t-l2l',6)">Growth%</th>
+  </tr></thead><tbody id="b-l2l"></tbody></table></div>
 </div>
 
 <!-- YTD -->
@@ -832,6 +842,7 @@ var ALL_MONTHS=['APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB
 var selMonths=['APR'];   // checked months; selMonths[0] is the primary month driving single-month tabs
 var monthCache={};        // month -> stores array, for multi-month Summary combine
 var prevFetching={};      // guards background fetch of previous month (Weekly continuous compare)
+var L2L_DATA=null;        // last-FY (2025-26) daily sales per month per store code, from l2l_map.json
 
 // ═══════════════════════════════════════════
 // FORMAT
@@ -1035,7 +1046,7 @@ function renderAll(){
   renderKPIs();renderGroup('rm','b-rm');renderGroup('cm','b-cm');
   renderSummary();
   renderStores();renderDaywise();renderMTD();renderWK(activeWK);
-  renderKPIAlerts();renderAudit();
+  renderL2L();renderKPIAlerts();renderAudit();
 }
 
 // ═══════════════════════════════════════════
@@ -1477,6 +1488,60 @@ function renderWK(kpi){
     return'<tr style="cursor:pointer;" onclick="openDrill(\''+s.code+'\')"><td style="font-weight:700;color:#3b82f6;">'+s.code+'</td><td>'+s.rm+'</td>'+ws.map(function(v){return'<td class="r">'+(v>0?fm(v):'—')+'</td>';}).join('')+'<td class="r">'+chgCell(prevLW(s),ws[0])+'</td><td class="r">'+chgCell(ws[0],ws[1])+'</td><td class="r">'+chgCell(ws[1],ws[2])+'</td><td class="r">'+chgCell(ws[2],ws[3])+'</td><td class="r" style="font-weight:700;">'+(mtd>0?fm(mtd):'—')+'</td></tr>';
   }).join('')+
   '<tr class="ft"><td colspan="2">Region</td>'+rWks.map(function(v){return'<td class="r">'+(v>0?fm(v):'—')+'</td>';}).join('')+'<td class="r">'+chgCell(rPrev,rWks[0])+'</td><td class="r">'+chgCell(rWks[0],rWks[1])+'</td><td class="r">'+chgCell(rWks[1],rWks[2])+'</td><td class="r">'+chgCell(rWks[2],rWks[3])+'</td><td class="r">'+fm(rWks.reduce(function(a,b){return a+b;},0))+'</td></tr>'||nd(10);
+}
+
+// ═══════════════════════════════════════════
+// L2L — Like-for-Like vs last FY (2025-26)
+// Compares this year's elapsed days (1..N) to the SAME dates last year.
+// ═══════════════════════════════════════════
+function l2lElapsed(){            // N = number of elapsed dates this month (region has sales)
+  var maxLen=0;raw.forEach(function(s){if(s.daySales)maxLen=Math.max(maxLen,s.daySales.length);});
+  var N=0;for(var i=0;i<maxLen;i++){var sum=0;raw.forEach(function(s){sum+=(s.daySales&&s.daySales[i])||0;});if(sum>0)N=i+1;}
+  return N;
+}
+function renderL2L(){
+  var body=document.getElementById('b-l2l');if(!body)return;
+  var month=activeSheet;
+  var ly=L2L_DATA?L2L_DATA[month]:null;
+  var N=l2lElapsed();
+  var rows=filtered.map(function(s){
+    var ty=(s.daySales||[]).slice(0,N).reduce(function(a,b){return a+b;},0);
+    var lyArr=ly?ly[(s.code||'').toUpperCase()]:null;
+    var lyv=lyArr?lyArr.slice(0,N).reduce(function(a,b){return a+b;},0):null;
+    var g=(lyv&&lyv>0)?Math.round((ty-lyv)/lyv*100):null;
+    return {s:s,ty:ty,ly:lyv,g:g};
+  });
+  rows.sort(function(a,b){return (b.g==null?-99999:b.g)-(a.g==null?-99999:a.g);});
+  var tTY=0,tLY=0;rows.forEach(function(r){tTY+=r.ty;if(r.ly!=null)tLY+=r.ly;});
+  var tG=tLY>0?Math.round((tTY-tLY)/tLY*100):null;
+  var matched=rows.filter(function(r){return r.ly!=null;});
+  var grow=matched.filter(function(r){return r.g!=null&&r.g>0;}).length;
+  var degrow=matched.filter(function(r){return r.g!=null&&r.g<0;}).length;
+  // KPI cards
+  var cards=document.getElementById('l2l-cards');
+  if(cards){
+    function kc(l,v,s,cls){return '<div class="kc"><div class="kl">'+l+'</div><div class="kv'+(cls?' '+cls:'')+'">'+v+'</div><div class="ks">'+(s||'')+'</div></div>';}
+    cards.innerHTML=
+      kc('Overall LfL', tG==null?'—':((tG>=0?'+':'')+tG+'%'), 'this yr vs last yr', tG==null?'':(tG>=0?'gv':'rv'))+
+      kc('This Yr (LfL)', L(tTY), month+' 1–'+N)+
+      kc('Last Yr (LfL)', tLY?L(tLY):'—', 'FY25-26 '+month+' 1–'+N)+
+      kc('Growing', grow+'', 'stores', 'gv')+
+      kc('De-growing', degrow+'', 'stores', 'rv');
+  }
+  var note=!L2L_DATA?'  ·  loading last-year data…':(!ly?'  ·  no last-year data for '+month:'');
+  document.getElementById('l2l-title').textContent='Like-for-Like · '+month+' 1–'+N+' vs FY25-26'+note;
+  body.innerHTML=rows.map(function(r){
+    var gc=r.g==null?'':(r.g>=0?'gv':'rv');
+    return '<tr style="cursor:pointer;" onclick="openDrill(\''+r.s.code+'\')">'+
+      '<td style="font-weight:700;color:#3b82f6;">'+r.s.code+'</td><td>'+r.s.rm+'</td><td>'+mkt(r.s)+'</td>'+
+      '<td class="r" style="font-weight:600;">'+L(r.ty)+'</td>'+
+      '<td class="r">'+(r.ly!=null?L(r.ly):'—')+'</td>'+
+      '<td class="r '+gc+'">'+(r.ly!=null?(r.ty-r.ly>=0?'+':'')+L(r.ty-r.ly):'—')+'</td>'+
+      '<td class="r '+gc+'">'+(r.g==null?'—':((r.g>=0?'+':'')+r.g+'%'))+'</td></tr>';
+  }).join('')+
+  '<tr class="ft"><td colspan="3">Region ('+rows.length+')</td><td class="r">'+L(tTY)+'</td><td class="r">'+(tLY?L(tLY):'—')+'</td>'+
+  '<td class="r '+(tG==null?'':(tG>=0?'gv':'rv'))+'">'+(tLY?((tTY-tLY>=0?'+':'')+L(tTY-tLY)):'—')+'</td>'+
+  '<td class="r '+(tG==null?'':(tG>=0?'gv':'rv'))+'">'+(tG==null?'—':((tG>=0?'+':'')+tG+'%'))+'</td></tr>';
 }
 
 // ═══════════════════════════════════════════
@@ -2579,6 +2644,8 @@ window.addEventListener('load',function(){
   var catInp=document.getElementById('cat-url');
   if(urlInp&&savedURL)urlInp.value=savedURL;
   renderMonthPicker([]);
+  // Load last-FY (2025-26) data for the L2L tab (static historical file)
+  fetch('l2l_map.json').then(function(r){return r.ok?r.json():null;}).then(function(d){if(d){L2L_DATA=d;renderL2L();}}).catch(function(){});
   if(catInp&&savedCatURL)catInp.value=savedCatURL;
   if(savedURL){activeURL=savedURL;connectTo(savedURL,savedSheet);}
   else{setSt('Paste URL above and click Load','');showInfo('Paste your Apps Script URL in the top bar and click ▶ Load','inf');}
