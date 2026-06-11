@@ -380,11 +380,18 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
 
 <!-- L2L (Like-for-Like vs FY25-26) -->
 <div class="panel" id="panel-l2l">
+  <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+    <span style="font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">View:</span>
+    <button id="l2lv-store" class="wkbtn active" onclick="setL2LView('store')">Store</button>
+    <button id="l2lv-rm" class="wkbtn" onclick="setL2LView('rm')">RM</button>
+    <button id="l2lv-cm" class="wkbtn" onclick="setL2LView('cm')">CM</button>
+    <button id="l2lv-market" class="wkbtn" onclick="setL2LView('market')">Market</button>
+    <div style="flex:1"></div>
+    <button class="dl" onclick="dlT('t-l2l','L2L')">&#8595; CSV</button>
+  </div>
   <div class="krow" id="l2l-cards"></div>
-  <div class="sh"><span class="sh-t" id="l2l-title">Like-for-Like</span><div class="sh-l"></div><button class="dl" onclick="dlT('t-l2l','L2L')">&#8595; CSV</button></div>
-  <div class="tw"><table id="t-l2l"><thead><tr>
-    <th onclick="srt('t-l2l',0)">Store</th><th onclick="srt('t-l2l',1)">RM</th><th onclick="srt('t-l2l',2)">Market</th><th class="r" onclick="srt('t-l2l',3)">This Yr (LfL)</th><th class="r" onclick="srt('t-l2l',4)">Last Yr (LfL)</th><th class="r" onclick="srt('t-l2l',5)">Diff</th><th class="r" onclick="srt('t-l2l',6)">Growth%</th>
-  </tr></thead><tbody id="b-l2l"></tbody></table></div>
+  <div class="sh"><span class="sh-t" id="l2l-title">Like-for-Like</span><div class="sh-l"></div></div>
+  <div class="tw"><table id="t-l2l"><thead id="l2l-thead"></thead><tbody id="b-l2l"></tbody></table></div>
 </div>
 
 <!-- YTD -->
@@ -1499,24 +1506,43 @@ function l2lElapsed(){            // N = number of elapsed dates this month (reg
   var N=0;for(var i=0;i<maxLen;i++){var sum=0;raw.forEach(function(s){sum+=(s.daySales&&s.daySales[i])||0;});if(sum>0)N=i+1;}
   return N;
 }
+var L2L_VIEW='store';
+function setL2LView(v){
+  L2L_VIEW=v;
+  ['store','rm','cm','market'].forEach(function(k){var b=document.getElementById('l2lv-'+k);if(b)b.classList.toggle('active',k===v);});
+  renderL2L();
+}
 function renderL2L(){
   var body=document.getElementById('b-l2l');if(!body)return;
   var month=activeSheet;
   var ly=L2L_DATA?L2L_DATA[month]:null;
   var N=l2lElapsed();
-  var rows=filtered.map(function(s){
+  // per-store like-for-like figures
+  var perStore=filtered.map(function(s){
     var ty=(s.daySales||[]).slice(0,N).reduce(function(a,b){return a+b;},0);
     var lyArr=ly?ly[(s.code||'').toUpperCase()]:null;
     var lyv=lyArr?lyArr.slice(0,N).reduce(function(a,b){return a+b;},0):null;
-    var g=(lyv&&lyv>0)?Math.round((ty-lyv)/lyv*100):null;
-    return {s:s,ty:ty,ly:lyv,g:g};
+    return {s:s,ty:ty,ly:lyv};
   });
+  // build display rows per the selected view
+  var rows;
+  var grouped=(L2L_VIEW!=='store');
+  if(!grouped){
+    rows=perStore.map(function(r){return {label:r.s.code,rm:r.s.rm,market:mkt(r.s),code:r.s.code,ty:r.ty,ly:r.ly,n:1};});
+  } else {
+    var keyFn=L2L_VIEW==='rm'?function(r){return r.s.rm||'?';}:L2L_VIEW==='cm'?function(r){return r.s.cm||'?';}:function(r){return mkt(r.s)||'?';};
+    var G={};
+    perStore.forEach(function(r){var k=keyFn(r);if(!G[k])G[k]={label:k,ty:0,ly:0,lyHas:false,n:0};var g=G[k];g.ty+=r.ty;if(r.ly!=null){g.ly+=r.ly;g.lyHas=true;}g.n++;});
+    rows=Object.keys(G).map(function(k){var g=G[k];return {label:k,ty:g.ty,ly:g.lyHas?g.ly:null,n:g.n};});
+  }
+  rows.forEach(function(r){r.g=(r.ly&&r.ly>0)?Math.round((r.ty-r.ly)/r.ly*100):null;});
   rows.sort(function(a,b){return (b.g==null?-99999:b.g)-(a.g==null?-99999:a.g);});
   var tTY=0,tLY=0;rows.forEach(function(r){tTY+=r.ty;if(r.ly!=null)tLY+=r.ly;});
   var tG=tLY>0?Math.round((tTY-tLY)/tLY*100):null;
-  var matched=rows.filter(function(r){return r.ly!=null;});
-  var grow=matched.filter(function(r){return r.g!=null&&r.g>0;}).length;
-  var degrow=matched.filter(function(r){return r.g!=null&&r.g<0;}).length;
+  var grow=rows.filter(function(r){return r.g!=null&&r.g>0;}).length;
+  var degrow=rows.filter(function(r){return r.g!=null&&r.g<0;}).length;
+  var unit={store:'stores',rm:'RMs',cm:'CMs',market:'markets'}[L2L_VIEW];
+  var vlabel={store:'Store',rm:'RM',cm:'CM',market:'Market'}[L2L_VIEW];
   // KPI cards
   var cards=document.getElementById('l2l-cards');
   if(cards){
@@ -1525,23 +1551,38 @@ function renderL2L(){
       kc('Overall LfL', tG==null?'—':((tG>=0?'+':'')+tG+'%'), 'this yr vs last yr', tG==null?'':(tG>=0?'gv':'rv'))+
       kc('This Yr (LfL)', L(tTY), month+' 1–'+N)+
       kc('Last Yr (LfL)', tLY?L(tLY):'—', 'FY25-26 '+month+' 1–'+N)+
-      kc('Growing', grow+'', 'stores', 'gv')+
-      kc('De-growing', degrow+'', 'stores', 'rv');
+      kc('Growing', grow+'', unit, 'gv')+
+      kc('De-growing', degrow+'', unit, 'rv');
   }
   var note=!L2L_DATA?'  ·  loading last-year data…':(!ly?'  ·  no last-year data for '+month:'');
-  document.getElementById('l2l-title').textContent='Like-for-Like · '+month+' 1–'+N+' vs FY25-26'+note;
+  document.getElementById('l2l-title').textContent='Like-for-Like ('+vlabel+') · '+month+' 1–'+N+' vs FY25-26'+note;
+  // dynamic header
+  var th=document.getElementById('l2l-thead');
+  if(th){
+    if(!grouped){
+      th.innerHTML='<tr><th onclick="srt(\'t-l2l\',0)">Store</th><th onclick="srt(\'t-l2l\',1)">RM</th><th onclick="srt(\'t-l2l\',2)">Market</th><th class="r" onclick="srt(\'t-l2l\',3)">This Yr (LfL)</th><th class="r" onclick="srt(\'t-l2l\',4)">Last Yr (LfL)</th><th class="r" onclick="srt(\'t-l2l\',5)">Diff</th><th class="r" onclick="srt(\'t-l2l\',6)">Growth%</th></tr>';
+    } else {
+      th.innerHTML='<tr><th onclick="srt(\'t-l2l\',0)">'+vlabel+'</th><th class="r" onclick="srt(\'t-l2l\',1)">Stores</th><th class="r" onclick="srt(\'t-l2l\',2)">This Yr (LfL)</th><th class="r" onclick="srt(\'t-l2l\',3)">Last Yr (LfL)</th><th class="r" onclick="srt(\'t-l2l\',4)">Diff</th><th class="r" onclick="srt(\'t-l2l\',5)">Growth%</th></tr>';
+    }
+  }
+  function gc(g){return g==null?'':(g>=0?'gv':'rv');}
+  function diffCell(r){return r.ly!=null?((r.ty-r.ly>=0?'+':'')+L(r.ty-r.ly)):'—';}
+  function pctCell(r){return r.g==null?'—':((r.g>=0?'+':'')+r.g+'%');}
   body.innerHTML=rows.map(function(r){
-    var gc=r.g==null?'':(r.g>=0?'gv':'rv');
-    return '<tr style="cursor:pointer;" onclick="openDrill(\''+r.s.code+'\')">'+
-      '<td style="font-weight:700;color:#3b82f6;">'+r.s.code+'</td><td>'+r.s.rm+'</td><td>'+mkt(r.s)+'</td>'+
-      '<td class="r" style="font-weight:600;">'+L(r.ty)+'</td>'+
-      '<td class="r">'+(r.ly!=null?L(r.ly):'—')+'</td>'+
-      '<td class="r '+gc+'">'+(r.ly!=null?(r.ty-r.ly>=0?'+':'')+L(r.ty-r.ly):'—')+'</td>'+
-      '<td class="r '+gc+'">'+(r.g==null?'—':((r.g>=0?'+':'')+r.g+'%'))+'</td></tr>';
+    if(!grouped){
+      return '<tr style="cursor:pointer;" onclick="openDrill(\''+r.code+'\')">'+
+        '<td style="font-weight:700;color:#3b82f6;">'+r.label+'</td><td>'+r.rm+'</td><td>'+r.market+'</td>'+
+        '<td class="r" style="font-weight:600;">'+L(r.ty)+'</td><td class="r">'+(r.ly!=null?L(r.ly):'—')+'</td>'+
+        '<td class="r '+gc(r.g)+'">'+diffCell(r)+'</td><td class="r '+gc(r.g)+'">'+pctCell(r)+'</td></tr>';
+    }
+    return '<tr>'+
+      '<td style="font-weight:700;color:#3b82f6;">'+r.label+'</td><td class="r">'+r.n+'</td>'+
+      '<td class="r" style="font-weight:600;">'+L(r.ty)+'</td><td class="r">'+(r.ly!=null?L(r.ly):'—')+'</td>'+
+      '<td class="r '+gc(r.g)+'">'+diffCell(r)+'</td><td class="r '+gc(r.g)+'">'+pctCell(r)+'</td></tr>';
   }).join('')+
-  '<tr class="ft"><td colspan="3">Region ('+rows.length+')</td><td class="r">'+L(tTY)+'</td><td class="r">'+(tLY?L(tLY):'—')+'</td>'+
-  '<td class="r '+(tG==null?'':(tG>=0?'gv':'rv'))+'">'+(tLY?((tTY-tLY>=0?'+':'')+L(tTY-tLY)):'—')+'</td>'+
-  '<td class="r '+(tG==null?'':(tG>=0?'gv':'rv'))+'">'+(tG==null?'—':((tG>=0?'+':'')+tG+'%'))+'</td></tr>';
+  (grouped
+    ? '<tr class="ft"><td>Region</td><td class="r">'+rows.reduce(function(a,r){return a+r.n;},0)+'</td><td class="r">'+L(tTY)+'</td><td class="r">'+(tLY?L(tLY):'—')+'</td><td class="r '+gc(tG)+'">'+(tLY?((tTY-tLY>=0?'+':'')+L(tTY-tLY)):'—')+'</td><td class="r '+gc(tG)+'">'+(tG==null?'—':((tG>=0?'+':'')+tG+'%'))+'</td></tr>'
+    : '<tr class="ft"><td colspan="3">Region ('+rows.length+')</td><td class="r">'+L(tTY)+'</td><td class="r">'+(tLY?L(tLY):'—')+'</td><td class="r '+gc(tG)+'">'+(tLY?((tTY-tLY>=0?'+':'')+L(tTY-tLY)):'—')+'</td><td class="r '+gc(tG)+'">'+(tG==null?'—':((tG>=0?'+':'')+tG+'%'))+'</td></tr>');
 }
 
 // ═══════════════════════════════════════════
