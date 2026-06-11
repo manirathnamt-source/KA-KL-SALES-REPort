@@ -1528,7 +1528,7 @@ function renderL2L(){
   var rows;
   var grouped=(L2L_VIEW!=='store');
   if(!grouped){
-    rows=perStore.map(function(r){return {label:r.s.code,rm:r.s.rm,market:mkt(r.s),code:r.s.code,ty:r.ty,ly:r.ly,n:1};});
+    rows=perStore.map(function(r){return {label:r.s.code,rm:r.s.rm,cm:r.s.cm,market:mkt(r.s),code:r.s.code,ty:r.ty,ly:r.ly,n:1};});
   } else {
     var keyFn=L2L_VIEW==='rm'?function(r){return r.s.rm||'?';}:L2L_VIEW==='cm'?function(r){return r.s.cm||'?';}:function(r){return mkt(r.s)||'?';};
     var G={};
@@ -1560,7 +1560,7 @@ function renderL2L(){
   var th=document.getElementById('l2l-thead');
   if(th){
     if(!grouped){
-      th.innerHTML='<tr><th onclick="srt(\'t-l2l\',0)">Store</th><th onclick="srt(\'t-l2l\',1)">RM</th><th onclick="srt(\'t-l2l\',2)">Market</th><th class="r" onclick="srt(\'t-l2l\',3)">This Yr (LfL)</th><th class="r" onclick="srt(\'t-l2l\',4)">Last Yr (LfL)</th><th class="r" onclick="srt(\'t-l2l\',5)">Diff</th><th class="r" onclick="srt(\'t-l2l\',6)">Growth%</th></tr>';
+      th.innerHTML='<tr><th onclick="srt(\'t-l2l\',0)">Store</th><th onclick="srt(\'t-l2l\',1)">RM</th><th onclick="srt(\'t-l2l\',2)">CM</th><th onclick="srt(\'t-l2l\',3)">Market</th><th class="r" onclick="srt(\'t-l2l\',4)">This Yr (LfL)</th><th class="r" onclick="srt(\'t-l2l\',5)">Last Yr (LfL)</th><th class="r" onclick="srt(\'t-l2l\',6)">Diff</th><th class="r" onclick="srt(\'t-l2l\',7)">Growth%</th></tr>';
     } else {
       th.innerHTML='<tr><th onclick="srt(\'t-l2l\',0)">'+vlabel+'</th><th class="r" onclick="srt(\'t-l2l\',1)">Stores</th><th class="r" onclick="srt(\'t-l2l\',2)">This Yr (LfL)</th><th class="r" onclick="srt(\'t-l2l\',3)">Last Yr (LfL)</th><th class="r" onclick="srt(\'t-l2l\',4)">Diff</th><th class="r" onclick="srt(\'t-l2l\',5)">Growth%</th></tr>';
     }
@@ -1571,7 +1571,7 @@ function renderL2L(){
   body.innerHTML=rows.map(function(r){
     if(!grouped){
       return '<tr style="cursor:pointer;" onclick="openDrill(\''+r.code+'\')">'+
-        '<td style="font-weight:700;color:#3b82f6;">'+r.label+'</td><td>'+r.rm+'</td><td>'+r.market+'</td>'+
+        '<td style="font-weight:700;color:#3b82f6;">'+r.label+'</td><td>'+r.rm+'</td><td>'+(r.cm||'')+'</td><td>'+r.market+'</td>'+
         '<td class="r" style="font-weight:600;">'+L(r.ty)+'</td><td class="r">'+(r.ly!=null?L(r.ly):'—')+'</td>'+
         '<td class="r '+gc(r.g)+'">'+diffCell(r)+'</td><td class="r '+gc(r.g)+'">'+pctCell(r)+'</td></tr>';
     }
@@ -1582,7 +1582,7 @@ function renderL2L(){
   }).join('')+
   (grouped
     ? '<tr class="ft"><td>Region</td><td class="r">'+rows.reduce(function(a,r){return a+r.n;},0)+'</td><td class="r">'+L(tTY)+'</td><td class="r">'+(tLY?L(tLY):'—')+'</td><td class="r '+gc(tG)+'">'+(tLY?((tTY-tLY>=0?'+':'')+L(tTY-tLY)):'—')+'</td><td class="r '+gc(tG)+'">'+(tG==null?'—':((tG>=0?'+':'')+tG+'%'))+'</td></tr>'
-    : '<tr class="ft"><td colspan="3">Region ('+rows.length+')</td><td class="r">'+L(tTY)+'</td><td class="r">'+(tLY?L(tLY):'—')+'</td><td class="r '+gc(tG)+'">'+(tLY?((tTY-tLY>=0?'+':'')+L(tTY-tLY)):'—')+'</td><td class="r '+gc(tG)+'">'+(tG==null?'—':((tG>=0?'+':'')+tG+'%'))+'</td></tr>');
+    : '<tr class="ft"><td colspan="4">Region ('+rows.length+')</td><td class="r">'+L(tTY)+'</td><td class="r">'+(tLY?L(tLY):'—')+'</td><td class="r '+gc(tG)+'">'+(tLY?((tTY-tLY>=0?'+':'')+L(tTY-tLY)):'—')+'</td><td class="r '+gc(tG)+'">'+(tG==null?'—':((tG>=0?'+':'')+tG+'%'))+'</td></tr>');
 }
 
 // ═══════════════════════════════════════════
