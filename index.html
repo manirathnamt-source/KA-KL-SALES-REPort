@@ -964,9 +964,9 @@ function onMonthToggle(cb){
     raw=[];filtered=[];labels=[];renderAll();
     if(activeURL)connectTo(activeURL,activeSheet);
   } else {
-    // primary unchanged → just (un)load the extra month(s) for the Summary combine
+    // primary unchanged → (un)load the extra month(s); re-render combined Overview/Summary/L2L
     fetchCombineMonths();
-    renderSummary();
+    renderAll();
   }
 }
 function selectAllMonths(on){
@@ -976,7 +976,7 @@ function selectAllMonths(on){
   activeSheet=selMonths[0];
   localStorage.setItem('ka_months',JSON.stringify(selMonths));
   renderMonthPicker(window._lastSheets||[]);
-  fetchCombineMonths();renderSummary();
+  fetchCombineMonths();renderAll();
 }
 // Fetch any selected months not yet cached, then refresh the Summary
 function fetchCombineMonths(){
@@ -985,7 +985,7 @@ function fetchCombineMonths(){
     if(monthCache[m])return;
     jfetch(activeURL,m).then(function(d){
       if(d&&d.stores)monthCache[m]=d.stores;
-      renderSummary();
+      renderAll();
     }).catch(function(){});
   });
 }
@@ -1124,18 +1124,19 @@ function renderSummary(){
 // KPI CARDS — clickable for drill-down
 // ═══════════════════════════════════════════
 function renderKPIs(){
-  var el=document.getElementById('kpi-cards');if(!el||!filtered.length){if(el)el.innerHTML='';return;}
+  var el=document.getElementById('kpi-cards');var data=ovStores();if(!el||!data.length){if(el)el.innerHTML='';return;}
   var tgt=0,sal=0,bil=0,wlk=0,qty=0,proj=0;
-  filtered.forEach(function(s){tgt+=s.target;sal+=s.mtdSales;bil+=s.mtdBills;wlk+=s.mtdWalkIns;qty+=s.mtdSoldQty;proj+=s.projectedTotal||0;});
+  data.forEach(function(s){tgt+=s.target;sal+=s.mtdSales;bil+=s.mtdBills;wlk+=s.mtdWalkIns;qty+=s.mtdSoldQty;proj+=s.projectedTotal||0;});
   var ap=tgt?Math.round(sal/tgt*100):0,tp=tgt?Math.round(proj/tgt*100):0;
   var abv=bil?Math.round(sal/bil):0,conv=wlk?Math.round(bil/wlk*1000)/10:0,upt=bil?Math.round(qty/bil*100)/100:0;
-  var on=filtered.filter(function(s){return s.trendingPct>=100;}).length;
-  var lf=regionL2L(filtered);   // like-for-like vs last FY, respecting the current filter
+  var on=data.filter(function(s){return s.trendingPct>=100;}).length;
+  var lf=regionL2L(data);   // like-for-like vs last FY, respecting filter + selected months
+  var mlbl=(selMonths&&selMonths.length>1)?(' · '+selMonths.length+' months'):'';
   el.innerHTML=[
-    {l:'Target',v:L(tgt),s:filtered.length+' stores',c:'',key:'target'},
+    {l:'Target',v:L(tgt),s:data.length+' stores'+mlbl,c:'',key:'target'},
     {l:'MTD Sales',v:L(sal),s:ap+'% achieved',c:ap>=100?'grn':'red',key:'sales'},
     {l:'Projection',v:L(proj),s:tp+'% of target',c:tp>=100?'grn':'red',key:'proj'},
-    {l:'On Track',v:on,s:'of '+filtered.length+' stores',c:'',key:'track'},
+    {l:'On Track',v:on,s:'of '+data.length+' stores',c:'',key:'track'},
     {l:'L2L Growth',v:(lf.g==null?'—':((lf.g>=0?'+':'')+lf.g+'%')),s:(lf.matched?'vs FY25-26 ('+lf.matched+' stores)':'no last-yr data'),c:(lf.g==null?'':(lf.g>=0?'grn':'red')),key:'l2l'},
     {l:'L2L Grow / Degrow',v:lf.grow+' / '+lf.degrow,s:'growing / de-growing',c:'',key:'l2l'},
     {l:'Walk-ins',v:N(wlk),s:'MTD total',c:'',key:'walkins'},
@@ -1250,7 +1251,7 @@ function drillKPI(key){
 // ═══════════════════════════════════════════
 function renderGroup(key,bid){
   var G={};
-  filtered.forEach(function(s){
+  ovStores().forEach(function(s){
     var k=s[key]||'?';
     if(!G[k])G[k]={t:0,s:0,p:0,mb:0,mq:0,mw:0,wt:0,wp:0,ct:0,at:0,ut:0,n:0};
     var g=G[k],kt=s.kpiTargets||{};
@@ -1285,7 +1286,7 @@ function filterBy(key,val){var id=key==='rm'?'sel-rm':'sel-cm';var el=document.g
 // STORE TABLE
 // ═══════════════════════════════════════════
 function renderStores(){
-  var f=[...filtered].sort(function(a,b){return(b.trendingPct||0)-(a.trendingPct||0);});
+  var f=[...ovStores()].sort(function(a,b){return(b.trendingPct||0)-(a.trendingPct||0);});
   var dL=Math.max(0,totalDays-(f[0]&&f[0].daysCount||0));
   var totT=0,totS=0,totP=0;f.forEach(function(s){totT+=s.target;totS+=s.mtdSales;totP+=s.projectedTotal||0;});
   document.getElementById('b-store').innerHTML=f.map(function(s){
@@ -1521,10 +1522,47 @@ function storeL2L(s,N){
   var g=(lyv&&lyv>0)?Math.round((ty-lyv)/lyv*100):null;
   return {ty:ty,ly:lyv,g:g};
 }
-// Aggregate L2L over a store list (respects the current filter when passed `filtered`)
+// ── Multi-month combine: when >1 month is ticked, Overview & L2L sum across them ──
+function l2lWindow(stores){var maxLen=0;stores.forEach(function(s){if(s.daySales)maxLen=Math.max(maxLen,s.daySales.length);});var N=0;for(var i=0;i<maxLen;i++){var sm=0;stores.forEach(function(s){sm+=(s.daySales&&s.daySales[i])||0;});if(sm>0)N=i+1;}return N;}
+function curPred(){var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value,mkEl=document.getElementById('sel-market'),mkv=mkEl?mkEl.value:'';return function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mkv||mkt(s)===mkv);};}
+// Combined per-store records across the selected months (totals summed, rates recomputed,
+// rate-targets averaged) plus pre-summed like-for-like (_ty/_ly) per month window.
+function aggStores(){
+  var months=(selMonths&&selMonths.length)?selMonths:[activeSheet];
+  var pred=curPred(),by={};
+  months.forEach(function(m){
+    var stores=(m===activeSheet?raw:(monthCache[m]||[]));if(!stores.length)return;
+    var ly=L2L_DATA?L2L_DATA[m]:null,N=l2lWindow(stores);
+    stores.filter(pred).forEach(function(s){
+      var k=(s.code||s.name);if(!k)return;
+      if(!by[k])by[k]={code:s.code,name:s.name,rm:s.rm,cm:s.cm,city:s.city,target:0,mtdSales:0,projectedTotal:0,mtdBills:0,mtdWalkIns:0,mtdSoldQty:0,daysCount:0,_tn:0,kpiTargets:{walkIns:0,bills:0,conversion:0,abv:0,upt:0},_ty:0,_ly:0,_lyHas:false,daySales:[]};
+      var c=by[k],kt=s.kpiTargets||{};
+      c.target+=s.target||0;c.mtdSales+=s.mtdSales||0;c.projectedTotal+=s.projectedTotal||0;c.mtdBills+=s.mtdBills||0;c.mtdWalkIns+=s.mtdWalkIns||0;c.mtdSoldQty+=s.mtdSoldQty||0;c.daysCount=Math.max(c.daysCount,s.daysCount||0);c._tn++;
+      c.kpiTargets.walkIns+=kt.walkIns||0;c.kpiTargets.bills+=kt.bills||0;c.kpiTargets.conversion+=kt.conversion||0;c.kpiTargets.abv+=kt.abv||0;c.kpiTargets.upt+=kt.upt||0;
+      var ty=(s.daySales||[]).slice(0,N).reduce(function(a,b){return a+b;},0);
+      var arr=ly?ly[(s.code||'').toUpperCase()]:null,lyv=arr?arr.slice(0,N).reduce(function(a,b){return a+b;},0):null;
+      c._ty+=ty;if(lyv!=null){c._ly+=lyv;c._lyHas=true;}
+    });
+  });
+  return Object.keys(by).map(function(k){var c=by[k],n=c._tn||1;
+    c.pct=c.target?Math.round(c.mtdSales/c.target*100):0;
+    c.trendingPct=c.target?Math.round(c.projectedTotal/c.target*100):0;
+    c.convActual=c.mtdWalkIns?Math.round(c.mtdBills/c.mtdWalkIns*1000)/10:0;
+    c.abv=c.mtdBills?Math.round(c.mtdSales/c.mtdBills):0;
+    c.upt=c.mtdBills?Math.round(c.mtdSoldQty/c.mtdBills*100)/100:0;
+    c.kpiTargets.conversion=Math.round(c.kpiTargets.conversion/n);
+    c.kpiTargets.abv=Math.round(c.kpiTargets.abv/n);
+    c.kpiTargets.upt=Math.round(c.kpiTargets.upt/n*100)/100;
+    return c;
+  });
+}
+// Store set for Overview/L2L: combined when >1 month ticked, else the single-month `filtered`
+function ovStores(){return (selMonths&&selMonths.length>1)?aggStores():filtered;}
+function l2lOf(s){if(s._ty!=null)return {ty:s._ty,ly:s._lyHas?s._ly:null,g:(s._lyHas&&s._ly>0)?Math.round((s._ty-s._ly)/s._ly*100):null};return storeL2L(s);}
+// Aggregate L2L over a store list (combined-aware)
 function regionL2L(list){
-  var N=l2lElapsed(),tTY=0,tLY=0,grow=0,degrow=0,matched=0;
-  list.forEach(function(s){var r=storeL2L(s,N);tTY+=r.ty;if(r.ly!=null){tLY+=r.ly;matched++;if(r.g>0)grow++;else if(r.g<0)degrow++;}});
+  var tTY=0,tLY=0,grow=0,degrow=0,matched=0;
+  list.forEach(function(s){var r=l2lOf(s);tTY+=r.ty;if(r.ly!=null){tLY+=r.ly;matched++;if(r.g>0)grow++;else if(r.g<0)degrow++;}});
   return {ty:tTY,ly:tLY,g:tLY>0?Math.round((tTY-tLY)/tLY*100):null,grow:grow,degrow:degrow,matched:matched};
 }
 var L2L_VIEW='store';
@@ -1538,13 +1576,9 @@ function renderL2L(){
   var month=activeSheet;
   var ly=L2L_DATA?L2L_DATA[month]:null;
   var N=l2lElapsed();
-  // per-store like-for-like figures
-  var perStore=filtered.map(function(s){
-    var ty=(s.daySales||[]).slice(0,N).reduce(function(a,b){return a+b;},0);
-    var lyArr=ly?ly[(s.code||'').toUpperCase()]:null;
-    var lyv=lyArr?lyArr.slice(0,N).reduce(function(a,b){return a+b;},0):null;
-    return {s:s,ty:ty,ly:lyv};
-  });
+  var multi=(selMonths&&selMonths.length>1);
+  // per-store like-for-like figures (combined across selected months when multi)
+  var perStore=ovStores().map(function(s){var r=l2lOf(s);return {s:s,ty:r.ty,ly:r.ly};});
   // build display rows per the selected view
   var rows;
   var grouped=(L2L_VIEW!=='store');
@@ -1570,13 +1604,14 @@ function renderL2L(){
     function kc(l,v,s,cls){return '<div class="kc"><div class="kl">'+l+'</div><div class="kv'+(cls?' '+cls:'')+'">'+v+'</div><div class="ks">'+(s||'')+'</div></div>';}
     cards.innerHTML=
       kc('Overall LfL', tG==null?'—':((tG>=0?'+':'')+tG+'%'), 'this yr vs last yr', tG==null?'':(tG>=0?'gv':'rv'))+
-      kc('This Yr (LfL)', L(tTY), month+' 1–'+N)+
-      kc('Last Yr (LfL)', tLY?L(tLY):'—', 'FY25-26 '+month+' 1–'+N)+
+      kc('This Yr (LfL)', L(tTY), multi?selMonths.join('+'):(month+' 1–'+N))+
+      kc('Last Yr (LfL)', tLY?L(tLY):'—', 'FY25-26 '+(multi?selMonths.join('+'):(month+' 1–'+N)))+
       kc('Growing', grow+'', unit, 'gv')+
       kc('De-growing', degrow+'', unit, 'rv');
   }
-  var note=!L2L_DATA?'  ·  loading last-year data…':(!ly?'  ·  no last-year data for '+month:'');
-  document.getElementById('l2l-title').textContent='Like-for-Like ('+vlabel+') · '+month+' 1–'+N+' vs FY25-26'+note;
+  var period=multi?selMonths.join('+'):(month+' 1–'+N);
+  var note=!L2L_DATA?'  ·  loading last-year data…':(!multi&&!ly?'  ·  no last-year data for '+month:'');
+  document.getElementById('l2l-title').textContent='Like-for-Like ('+vlabel+') · '+period+' vs FY25-26'+note;
   // dynamic header
   var th=document.getElementById('l2l-thead');
   if(th){
@@ -2002,11 +2037,15 @@ function openDrill(code){
 
     // ── L2L strip (like-for-like vs last FY) ──
     (function(){
-      var r=storeL2L(s);var N=l2lElapsed();
+      var multi=(selMonths&&selMonths.length>1);
+      var r;
+      if(multi){var rec=aggStores().filter(function(x){return x.code===code;})[0];r=rec?l2lOf(rec):{ty:0,ly:null,g:null};}
+      else r=storeL2L(s);
+      var period=multi?selMonths.join('+'):(activeSheet+' 1–'+l2lElapsed());
       var col=r.g==null?'var(--text2)':(r.g>=0?'var(--green)':'var(--red)');
       var bg=r.g==null?'var(--surface2)':(r.g>=0?'var(--green-bg)':'var(--red-bg)');
       return '<div style="display:flex;gap:14px;align-items:center;background:'+bg+';border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px;flex-wrap:wrap;">'+
-        '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;">L2L · '+activeSheet+' 1–'+N+' vs FY25-26</div>'+
+        '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;">L2L · '+period+' vs FY25-26</div>'+
         '<div style="font-size:12px;color:var(--text);">This Yr: <b>'+Lm(r.ty)+'</b></div>'+
         '<div style="font-size:12px;color:var(--text);">Last Yr: <b>'+(r.ly!=null?Lm(r.ly):'—')+'</b></div>'+
         '<div style="font-size:12px;color:var(--text);">Diff: <b style="color:'+col+';">'+(r.ly!=null?((r.ty-r.ly>=0?'+':'')+Lm(r.ty-r.ly)):'—')+'</b></div>'+
