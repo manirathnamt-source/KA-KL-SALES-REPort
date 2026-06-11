@@ -1130,21 +1130,26 @@ function renderKPIs(){
   var ap=tgt?Math.round(sal/tgt*100):0,tp=tgt?Math.round(proj/tgt*100):0;
   var abv=bil?Math.round(sal/bil):0,conv=wlk?Math.round(bil/wlk*1000)/10:0,upt=bil?Math.round(qty/bil*100)/100:0;
   var on=filtered.filter(function(s){return s.trendingPct>=100;}).length;
+  var lf=regionL2L(filtered);   // like-for-like vs last FY, respecting the current filter
   el.innerHTML=[
     {l:'Target',v:L(tgt),s:filtered.length+' stores',c:'',key:'target'},
     {l:'MTD Sales',v:L(sal),s:ap+'% achieved',c:ap>=100?'grn':'red',key:'sales'},
     {l:'Projection',v:L(proj),s:tp+'% of target',c:tp>=100?'grn':'red',key:'proj'},
     {l:'On Track',v:on,s:'of '+filtered.length+' stores',c:'',key:'track'},
+    {l:'L2L Growth',v:(lf.g==null?'—':((lf.g>=0?'+':'')+lf.g+'%')),s:(lf.matched?'vs FY25-26 ('+lf.matched+' stores)':'no last-yr data'),c:(lf.g==null?'':(lf.g>=0?'grn':'red')),key:'l2l'},
+    {l:'L2L Grow / Degrow',v:lf.grow+' / '+lf.degrow,s:'growing / de-growing',c:'',key:'l2l'},
     {l:'Walk-ins',v:N(wlk),s:'MTD total',c:'',key:'walkins'},
     {l:'Conv%',v:conv+'%',s:'bills ÷ walkins',c:'',key:'conv'},
     {l:'ABV',v:abv?'₹'+abv.toLocaleString('en-IN'):'—',s:'avg bill value',c:'',key:'abv'},
     {l:'UPT',v:R2(upt),s:'units per bill',c:'',key:'upt'},
   ].map(function(c){
-    return'<div class="kc '+c.c+'" style="cursor:pointer;" onclick="drillKPI(\''+c.key+'\')" title="Click to see store breakdown">'+
+    var click=c.key==='l2l'?'goL2L()':'drillKPI(\''+c.key+'\')';
+    return'<div class="kc '+c.c+'" style="cursor:pointer;" onclick="'+click+'" title="'+(c.key==='l2l'?'Open L2L tab':'Click to see store breakdown')+'">'+
       '<div class="kl">'+c.l+' <span style="font-size:9px;color:#9ca3af;">▼</span></div>'+
       '<div class="kv">'+c.v+'</div><div class="ks">'+c.s+'</div></div>';
   }).join('');
 }
+function goL2L(){var t=[].slice.call(document.querySelectorAll('.tab')).filter(function(x){return /'l2l'/.test(x.getAttribute('onclick')||'');})[0];showTab('l2l',t||document.querySelector('.tab'));}
 
 // ═══════════════════════════════════════════
 // KPI DRILL-DOWN MODAL
@@ -1505,6 +1510,22 @@ function l2lElapsed(){            // N = number of elapsed dates this month (reg
   var maxLen=0;raw.forEach(function(s){if(s.daySales)maxLen=Math.max(maxLen,s.daySales.length);});
   var N=0;for(var i=0;i<maxLen;i++){var sum=0;raw.forEach(function(s){sum+=(s.daySales&&s.daySales[i])||0;});if(sum>0)N=i+1;}
   return N;
+}
+// Like-for-like for one store: this year (dates 1..N) vs same dates last FY
+function storeL2L(s,N){
+  if(N==null)N=l2lElapsed();
+  var ly=L2L_DATA?L2L_DATA[activeSheet]:null;
+  var ty=(s.daySales||[]).slice(0,N).reduce(function(a,b){return a+b;},0);
+  var lyArr=ly?ly[(s.code||'').toUpperCase()]:null;
+  var lyv=lyArr?lyArr.slice(0,N).reduce(function(a,b){return a+b;},0):null;
+  var g=(lyv&&lyv>0)?Math.round((ty-lyv)/lyv*100):null;
+  return {ty:ty,ly:lyv,g:g};
+}
+// Aggregate L2L over a store list (respects the current filter when passed `filtered`)
+function regionL2L(list){
+  var N=l2lElapsed(),tTY=0,tLY=0,grow=0,degrow=0,matched=0;
+  list.forEach(function(s){var r=storeL2L(s,N);tTY+=r.ty;if(r.ly!=null){tLY+=r.ly;matched++;if(r.g>0)grow++;else if(r.g<0)degrow++;}});
+  return {ty:tTY,ly:tLY,g:tLY>0?Math.round((tTY-tLY)/tLY*100):null,grow:grow,degrow:degrow,matched:matched};
 }
 var L2L_VIEW='store';
 function setL2LView(v){
@@ -1978,6 +1999,20 @@ function openDrill(code){
     '</div>'+
 
     '<div style="padding:16px 20px;">'+
+
+    // ── L2L strip (like-for-like vs last FY) ──
+    (function(){
+      var r=storeL2L(s);var N=l2lElapsed();
+      var col=r.g==null?'var(--text2)':(r.g>=0?'var(--green)':'var(--red)');
+      var bg=r.g==null?'var(--surface2)':(r.g>=0?'var(--green-bg)':'var(--red-bg)');
+      return '<div style="display:flex;gap:14px;align-items:center;background:'+bg+';border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px;flex-wrap:wrap;">'+
+        '<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;">L2L · '+activeSheet+' 1–'+N+' vs FY25-26</div>'+
+        '<div style="font-size:12px;color:var(--text);">This Yr: <b>'+Lm(r.ty)+'</b></div>'+
+        '<div style="font-size:12px;color:var(--text);">Last Yr: <b>'+(r.ly!=null?Lm(r.ly):'—')+'</b></div>'+
+        '<div style="font-size:12px;color:var(--text);">Diff: <b style="color:'+col+';">'+(r.ly!=null?((r.ty-r.ly>=0?'+':'')+Lm(r.ty-r.ly)):'—')+'</b></div>'+
+        '<div style="margin-left:auto;font-size:15px;font-weight:800;color:'+col+';">'+(r.g==null?'—':((r.g>=0?'▲ +':'▼ ')+r.g+'%'))+'</div>'+
+      '</div>';
+    })()+
 
     // ── KPI Table ──
     kpiHTML+
