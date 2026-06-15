@@ -370,6 +370,7 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
     <button id="wk-conversion" class="wkbtn" onclick="switchWK('conversion')">Conv%</button>
     <button id="wk-abv" class="wkbtn" onclick="switchWK('abv')">ABV</button>
     <button id="wk-upt" class="wkbtn" onclick="switchWK('upt')">UPT</button>
+    <button id="wk-all" class="wkbtn" onclick="switchWK('all')" style="font-weight:700;">&#9889; All KPIs</button>
     <div style="flex:1"></div>
     <button class="dl" onclick="dlT('t-wk','Weekly')">&#8595; CSV</button>
   </div>
@@ -1486,6 +1487,29 @@ function renderWK(kpi){
   var filteredPrev=prevStores?filtered.map(function(s){return prevByCode[s.code];}).filter(Boolean):[];
   var rPrev=prevStores?regionVal(filteredPrev,21,99):null;
   var prevLbl=prevMonth||'Prev';
+  function chg(a,b){if(a==null||!a)return'<span style="color:#9ca3af;">—</span>';var p=Math.round((b-a)/a*100);return'<span class="'+(p>0?'gv':p<0?'rv':'')+'">'+(p>=0?'+':'')+p+'%</span>';}
+  // ── ALL KPIs view: every KPI's week-over-week comparison % in one table ──
+  if(kpi==='all'){
+    var KS=[{k:'sales',l:'Sales',rate:false,fm:L},{k:'bills',l:'Bills',rate:false,fm:N},{k:'walkIns',l:'Walk-ins',rate:false,fm:N},{k:'conversion',l:'Conv%',rate:true,fm:function(v){return v?v.toFixed(1)+'%':'—';}},{k:'abv',l:'ABV',rate:true,fm:function(v){return v?L(v):'—';}},{k:'upt',l:'UPT',rate:true,fm:function(v){return v?parseFloat(v).toFixed(2):'—';}}];
+    function rVal(K,list,fi,ti){
+      if(K.rate){var ts2=0,tb=0,tw=0,tq=0;list.forEach(function(s){ts2+=wSal(s,fi,ti);tb+=wBil(s,fi,ti);tw+=wWlk(s,fi,ti);var tot=wSal(s,0,99);if(tot&&s.mtdSoldQty)tq+=Math.round(s.mtdSoldQty*wSal(s,fi,ti)/(tot||1));});
+        if(K.k==='conversion')return tw?Math.round(tb/tw*1000)/10:0;
+        if(K.k==='abv')return tb?Math.round(ts2/tb):0;
+        if(K.k==='upt')return tb?Math.round(tq/tb*100)/100:0;return 0;}
+      var fnK=fns[K.k]||wSal;return list.reduce(function(a,s){return a+fnK(s,fi,ti);},0);
+    }
+    document.getElementById('wk-title').textContent='All KPIs — Week-over-Week %'+(prevMonth?'  ·  W1 vs '+prevMonth+' last week':'');
+    document.getElementById('wk-cards').innerHTML='';
+    document.getElementById('wk-thead').innerHTML='<tr><th>KPI</th>'+wl.map(function(l){return'<th class="r">'+l+'</th>';}).join('')+'<th class="r">W1 v '+prevLbl+'</th><th class="r">W2vW1</th><th class="r">W3vW2</th><th class="r">W4vW3</th></tr>';
+    document.getElementById('b-wk').innerHTML=KS.map(function(K){
+      var v=weeks.map(function(w){return rVal(K,filtered,w[0],w[1]);});
+      var vp=filteredPrev.length?rVal(K,filteredPrev,21,99):null;
+      return '<tr><td style="font-weight:700;color:#3b82f6;">'+K.l+'</td>'+
+        v.map(function(x){return'<td class="r">'+(x>0?K.fm(x):'—')+'</td>';}).join('')+
+        '<td class="r">'+chg(vp,v[0])+'</td><td class="r">'+chg(v[0],v[1])+'</td><td class="r">'+chg(v[1],v[2])+'</td><td class="r">'+chg(v[2],v[3])+'</td></tr>';
+    }).join('');
+    return;
+  }
   document.getElementById('wk-title').textContent='Week-over-Week — '+lbls[kpi]+(prevMonth?'  ·  W1 vs '+prevMonth+' last week':'');
   var rWks=weeks.map(function(w){return regionVal(filtered,w[0],w[1]);});
   document.getElementById('wk-cards').innerHTML=rWks.map(function(v,i){
