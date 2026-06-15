@@ -854,8 +854,8 @@ var L2L_DATA=null;        // last-FY (2025-26) daily sales per month per store c
 // ═══════════════════════════════════════════
 // FORMAT
 // ═══════════════════════════════════════════
-function L(n){if(!n&&n!==0)return'—';var a=Math.abs(n);return a>=1e7?'₹'+(n/1e7).toFixed(1)+'Cr':a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(0)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
-function N(n){return(!n&&n!==0)?'—':Math.abs(n)>=1000?(n/1000).toFixed(1)+'K':Math.round(n)+'';}
+function L(n){if(!n&&n!==0)return'—';var a=Math.abs(n);return a>=1e7?'₹'+(n/1e7).toFixed(1)+'Cr':a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(2)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
+function N(n){return(!n&&n!==0)?'—':Math.abs(n)>=1000?(n/1000).toFixed(2)+'K':Math.round(n)+'';}
 function R2(n){return(n===null||n===undefined)?'—':parseFloat(n).toFixed(2);}
 // ABV formatter — 2-decimal K so the gap to target is readable (₹3.45K, ₹4.28K)
 function LA(n){if(!n&&n!==0)return'—';var a=Math.abs(n);return a>=1e3?'₹'+(n/1e3).toFixed(2)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
@@ -1848,8 +1848,8 @@ function openDrill(code){
   var ap=s.pct||0,tp=s.trendingPct||0;
 
   // Format helpers
-  function Lm(n){if(!n&&n!==0)return'—';var a=Math.abs(n);return a>=1e7?'₹'+(n/1e7).toFixed(1)+'Cr':a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(0)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
-  function Nm(n){return(!n&&n!==0)?'—':Math.abs(n)>=1000?(Math.round(n/100)/10)+'K':Math.round(n)+'';}
+  function Lm(n){if(!n&&n!==0)return'—';var a=Math.abs(n);return a>=1e7?'₹'+(n/1e7).toFixed(1)+'Cr':a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(2)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
+  function Nm(n){return(!n&&n!==0)?'—':Math.abs(n)>=1000?(n/1000).toFixed(2)+'K':Math.round(n)+'';}
   function fmtPct(v){return(Math.round((v||0)*10)/10)+'%';}
   function fmtUPT(v){return v?parseFloat(v).toFixed(2):'—';}
   function pcc(p){return p>=100?'var(--green)':p>=85?'var(--amber)':'var(--red)';}
@@ -2103,7 +2103,7 @@ function openDrill(code){
 function showSubCatInPopup(catName){
   var cd=window._popupCd;if(!cd)return;
   var catColors=['#7c3aed','#2563eb','#16a34a','#d97706','#dc2626','#0891b2','#be185d','#854d0e'];
-  function Lm(n){var a=Math.abs(n);return a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(0)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
+  function Lm(n){var a=Math.abs(n);return a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(2)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
   var subs=(cd.subCategories||[]).filter(function(sc){return sc.name.indexOf(catName+'›')===0;}).map(function(sc){return{name:sc.name.replace(catName+'›',''),sales:sc.sales,pct:sc.pct};}).sort(function(a,b){return b.sales-a.sales;});
   var el=document.getElementById('popup-subcat-col');if(!el)return;
   var maxV=subs.length?subs[0].sales:1;
@@ -2121,7 +2121,7 @@ function showSubCatInPopup(catName){
 function resetSubCatView(){
   var cd=window._popupCd;if(!cd)return;
   var catColors=['#7c3aed','#2563eb','#16a34a','#d97706','#dc2626','#0891b2','#be185d','#854d0e'];
-  function Lm(n){var a=Math.abs(n);return a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(0)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
+  function Lm(n){var a=Math.abs(n);return a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(2)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
   var el=document.getElementById('popup-subcat-col');if(!el)return;
   var arr=cd.productTypes||[];var maxV=arr.length?arr[0].sales:1;
   el.innerHTML='<div style="font-size:10px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.04em;margin:8px 0 5px;">🏷️ Product Type</div>'+
@@ -2202,8 +2202,8 @@ function renderCat(){
       if(!hasFilter||isStoreInFilter(k))catStoreDetails[k]=catData.storeDetails[k];
     });
   }
-  function Lc(n){if(!n&&n!==0)return'—';var a=Math.abs(n);return a>=1e7?'₹'+(n/1e7).toFixed(1)+'Cr':a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(0)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
-  function Nc(n){return(!n&&n!==0)?'—':Math.abs(n)>=1000?(n/1000).toFixed(1)+'K':Math.round(n)+'';}
+  function Lc(n){if(!n&&n!==0)return'—';var a=Math.abs(n);return a>=1e7?'₹'+(n/1e7).toFixed(1)+'Cr':a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(2)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
+  function Nc(n){return(!n&&n!==0)?'—':Math.abs(n)>=1000?(n/1000).toFixed(2)+'K':Math.round(n)+'';}
   function badgePct(p,col){return'<span style="background:'+col+'22;color:'+col+';border-radius:12px;padding:1px 8px;font-size:10px;font-weight:700;">'+p+'%</span>';}
   var catColors=['#7c3aed','#2563eb','#16a34a','#d97706','#dc2626','#0891b2','#be185d','#854d0e'];
   var el=document.getElementById('cat-kpis');
@@ -2401,7 +2401,7 @@ function drillCategory(catName){
   if(!catData||!catData.subCategories)return;
   var subs=(catData.subCategories[catName]||[]).sort(function(a,b){return b.sales-a.sales;});
   if(!subs.length){alert('No sub-category data for: '+catName);return;}
-  function Lc(n){var a=Math.abs(n);return a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(0)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
+  function Lc(n){var a=Math.abs(n);return a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(2)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
   var colors=['#7c3aed','#2563eb','#16a34a','#d97706','#dc2626','#0891b2','#be185d','#854d0e','#065f46','#7f1d1d'];
   var existing=document.getElementById('cat-drill-modal');if(existing)existing.remove();
   var m=document.createElement('div');
@@ -2432,7 +2432,7 @@ function drillCategory(catName){
 
 function renderCatAudit(){
   var el=document.getElementById('b-cat-audit');if(!el||!catData)return;
-  function Lc(n){var a=Math.abs(n);return a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(0)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
+  function Lc(n){var a=Math.abs(n);return a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(2)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
   var sps=catData.salespersons||[];
   var avgSp=sps.length?Math.round(sps.reduce(function(a,s){return a+s.sales;},0)/sps.length):0;
   var avgAbv=sps.length?Math.round(sps.reduce(function(a,s){return a+s.abv;},0)/sps.length):0;
