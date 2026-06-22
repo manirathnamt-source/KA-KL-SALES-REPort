@@ -2019,16 +2019,19 @@ function openDrill(code){
       '<th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid var(--border);min-width:120px;">Progress</th>'+
     '</tr></thead><tbody>'+kpiRows+'</tbody></table></div>';
 
-  // Day-wise rows
+  // Day-wise rows (with last-FY same-day sales shown before this year's)
   var ds=s.daySales||[];
+  var lyDay=(L2L_DATA&&L2L_DATA[activeSheet]&&L2L_DATA[activeSheet][(code||'').toUpperCase()])||[];
   var maxDay=Math.max.apply(null,ds.concat([dTgt||1]));
   var dayRows=ds.map(function(v,i){
     var lbl=labels[i]||('D'+(i+1));
     var p=dTgt&&v?Math.round(v/dTgt*100):0;
     var bw=maxDay>0?Math.round(Math.abs(v||0)/maxDay*100):0;
     var col=v?p>=100?'var(--green)':p>=85?'var(--amber)':'var(--red)':'var(--text3)';
+    var lv=lyDay[i]||0;
     return '<tr>'+
       '<td style="padding:4px 10px;font-size:11px;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border);">'+lbl+'</td>'+
+      '<td style="padding:4px 10px;text-align:right;font-size:11px;font-family:monospace;color:var(--text3);border-bottom:1px solid var(--border);white-space:nowrap;">'+(lv?Lm(lv):'—')+'</td>'+
       '<td style="padding:4px 10px;text-align:right;font-size:11px;font-family:monospace;color:'+col+';font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap;">'+(v?Lm(v):'—')+'</td>'+
       '<td style="padding:4px 8px;text-align:right;font-size:10px;color:'+col+';border-bottom:1px solid var(--border);">'+(v?p+'%':'')+'</td>'+
       '<td style="padding:4px 10px;border-bottom:1px solid var(--border);width:70px;">'+
@@ -2181,6 +2184,7 @@ function openDrill(code){
           '<table style="width:100%;border-collapse:collapse;">'+
           '<thead><tr style="background:var(--surface2);position:sticky;top:0;z-index:1;">'+
             '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text2);border-bottom:2px solid var(--border);text-transform:uppercase;letter-spacing:.05em;">Day</th>'+
+            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text2);border-bottom:2px solid var(--border);text-transform:uppercase;letter-spacing:.05em;">Last Yr</th>'+
             '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text2);border-bottom:2px solid var(--border);text-transform:uppercase;letter-spacing:.05em;">Sales</th>'+
             '<th style="padding:6px 6px;font-size:9px;text-align:right;color:var(--text2);border-bottom:2px solid var(--border);text-transform:uppercase;letter-spacing:.05em;">%</th>'+
             '<th style="padding:6px 8px;font-size:9px;color:var(--text2);border-bottom:2px solid var(--border);text-transform:uppercase;letter-spacing:.05em;">Bar</th>'+
@@ -2188,6 +2192,7 @@ function openDrill(code){
           '<tbody>'+dayRows+'</tbody>'+
           '<tfoot><tr style="background:var(--surface2);font-weight:700;">'+
             '<td style="padding:6px 10px;font-size:11px;border-top:2px solid var(--border);">MTD</td>'+
+            '<td style="padding:6px 10px;text-align:right;font-size:11px;font-family:monospace;color:var(--text3);border-top:2px solid var(--border);">'+Lm(lyDay.slice(0,ds.length).reduce(function(a,b){return a+(b||0);},0))+'</td>'+
             '<td style="padding:6px 10px;text-align:right;font-size:11px;font-family:monospace;color:'+pcc(ap)+';border-top:2px solid var(--border);">'+Lm(s.mtdSales)+'</td>'+
             '<td style="padding:6px 6px;text-align:right;font-size:11px;color:'+pcc(ap)+';border-top:2px solid var(--border);">'+ap+'%</td>'+
             '<td style="border-top:2px solid var(--border);"></td>'+
