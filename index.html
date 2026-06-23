@@ -144,6 +144,12 @@ body {
 
 /* ═══ KPI CARDS ═══ */
 .krow { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.tchips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.tchip { cursor: pointer; border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; background: var(--surface); transition: all .12s; user-select: none; }
+.tchip:hover { border-color: var(--primary); background: var(--surface2); }
+.tchip.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.tchip-l { font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+.tchip-v { font-size: 10px; opacity: .8; margin-top: 1px; }
 .kc {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 12px 14px; cursor: pointer; transition: all .15s; box-shadow: var(--shadow);
@@ -298,7 +304,6 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <div class="tab" onclick="showTab('weekly',this)">&#128198; Weekly</div>
   <div class="tab" onclick="showTab('l2l',this)">&#128200; L2L</div>
   <div class="tab" onclick="showTab('los',this)">&#128184; Loss of Sale</div>
-  <div class="tab" onclick="showTab('bif',this)">&#128203; Bifurcation</div>
     <div class="tab" onclick="showTab('ytd',this)">&#128337; YTD</div>
 <div class="tab warn" onclick="showTab('kpialerts',this)">&#9888; KPI Alerts</div>
   <div class="tab danger" onclick="showTab('audit',this)">&#128270; Audit</div>
@@ -310,6 +315,7 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
 
 <!-- OVERVIEW -->
 <div class="panel active" id="panel-home">
+  <div class="tchips" id="type-chips"></div>
   <div class="krow" id="kpi-cards"></div>
   <div class="sh"><span class="sh-t">RM Performance</span><div class="sh-l"></div><button class="dl" onclick="dlT('t-rm','RM')">&#8595; CSV</button></div>
   <div class="tw"><table id="t-rm"><thead><tr>
@@ -412,18 +418,6 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <div class="krow" id="los-cards"></div>
   <div class="sh"><span class="sh-t" id="los-title">Loss of Sale</span><div class="sh-l"></div></div>
   <div class="tw"><table id="t-los"><thead id="los-thead"></thead><tbody id="b-los"></tbody></table></div>
-</div>
-
-<!-- BIFURCATION (RM › CM › Store target vs achievement) -->
-<div class="panel" id="panel-bif">
-  <div class="sh"><span class="sh-t">By Type — SSSG · LY Open · TY Open</span><div class="sh-l"></div></div>
-  <div class="tw"><table id="t-biftype"><thead><tr>
-    <th>Type</th><th class="r">Stores</th><th class="r">Target</th><th class="r">MTD Sales</th><th class="r">Ach%</th><th class="r">Projection</th><th class="r">Proj%</th>
-  </tr></thead><tbody id="b-biftype"></tbody></table></div>
-  <div class="sh"><span class="sh-t" id="bif-title">Bifurcation</span><div class="sh-l"></div><button class="dl" onclick="dlT('t-bif','Bifurcation')">&#8595; CSV</button></div>
-  <div class="tw"><table id="t-bif"><thead><tr>
-    <th onclick="srt('t-bif',0)">RM &#8250; CM &#8250; Store</th><th class="r" onclick="srt('t-bif',1)">Stores</th><th class="r" onclick="srt('t-bif',2)">Target</th><th class="r" onclick="srt('t-bif',3)">MTD Sales</th><th class="r" onclick="srt('t-bif',4)">Ach%</th><th class="r" onclick="srt('t-bif',5)">Projection</th><th class="r" onclick="srt('t-bif',6)">Proj%</th>
-  </tr></thead><tbody id="b-bif"></tbody></table></div>
 </div>
 
 <!-- YTD -->
@@ -1087,10 +1081,10 @@ function resetFilter(){['sel-rm','sel-cm','sel-city','sel-market','sel-type','se
 // RENDER ALL
 // ═══════════════════════════════════════════
 function renderAll(){
-  renderKPIs();renderGroup('rm','b-rm');renderGroup('cm','b-cm');
+  renderTypeChips();renderKPIs();renderGroup('rm','b-rm');renderGroup('cm','b-cm');
   renderSummary();
   renderStores();renderDaywise();renderMTD();renderWK(activeWK);
-  renderL2L();renderLOS();renderBif();renderKPIAlerts();renderAudit();
+  renderL2L();renderLOS();renderKPIAlerts();renderAudit();
 }
 
 // ═══════════════════════════════════════════
@@ -1161,6 +1155,21 @@ function renderSummary(){
 // ═══════════════════════════════════════════
 // KPI CARDS — clickable for drill-down
 // ═══════════════════════════════════════════
+// Clickable Type chips on the Overview top — click to filter the whole Overview to that category
+function setTypeFilter(t){var el=document.getElementById('sel-type');if(el)el.value=t;applyFilter();}
+function renderTypeChips(){
+  var el=document.getElementById('type-chips');if(!el)return;
+  var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value,mkEl=document.getElementById('sel-market'),mk=mkEl?mkEl.value:'';
+  // base = all stores matching the non-Type filters (so chips show this RM/CM/Market's type split)
+  var base=raw.filter(function(s){var nm=(s.name||s.code||'').toUpperCase();if(nm.indexOf('WAREHOUSE')!==-1||nm.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk);});
+  var cur=document.getElementById('sel-type')?document.getElementById('sel-type').value:'';
+  var G={};base.forEach(function(s){var t=styp(s);if(!G[t])G[t]={n:0,s:0};G[t].n++;G[t].s+=s.mtdSales;});
+  var totN=base.length,totS=base.reduce(function(a,s){return a+s.mtdSales;},0);
+  function chip(label,key,n,sales,active){return '<div class="tchip'+(active?' active':'')+'" onclick="setTypeFilter(\''+key+'\')" title="Click to view '+label+' detail"><div class="tchip-l">'+label+'</div><div class="tchip-v">'+n+' stores · '+L(sales)+'</div></div>';}
+  var html=chip('All Stores','',totN,totS,!cur);
+  ['SSSG','LY Open','TY Open'].forEach(function(t){var g=G[t]||{n:0,s:0};html+=chip(t,t,g.n,g.s,cur===t);});
+  el.innerHTML=html;
+}
 function renderKPIs(){
   var el=document.getElementById('kpi-cards');var data=ovStores();if(!el||!data.length){if(el)el.innerHTML='';return;}
   var tgt=0,sal=0,bil=0,wlk=0,qty=0,proj=0;
