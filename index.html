@@ -1165,10 +1165,73 @@ function renderTypeChips(){
   var cur=document.getElementById('sel-type')?document.getElementById('sel-type').value:'';
   var G={};base.forEach(function(s){var t=styp(s);if(!G[t])G[t]={n:0,s:0};G[t].n++;G[t].s+=s.mtdSales;});
   var totN=base.length,totS=base.reduce(function(a,s){return a+s.mtdSales;},0);
-  function chip(label,key,n,sales,active){return '<div class="tchip'+(active?' active':'')+'" onclick="setTypeFilter(\''+key+'\')" title="Click to view '+label+' detail"><div class="tchip-l">'+label+'</div><div class="tchip-v">'+n+' stores · '+L(sales)+'</div></div>';}
+  function chip(label,key,n,sales,active){return '<div class="tchip'+(active?' active':'')+'" onclick="openTypeDrill(\''+key+'\')" title="Click to drill into '+label+'"><div class="tchip-l">'+label+'</div><div class="tchip-v">'+n+' stores · '+L(sales)+'</div></div>';}
   var html=chip('All Stores','',totN,totS,!cur);
   ['SSSG','LY Open','TY Open'].forEach(function(t){var g=G[t]||{n:0,s:0};html+=chip(t,t,g.n,g.s,cur===t);});
   el.innerHTML=html;
+}
+// Combined stores of a given Type (or all), respecting non-Type filters + selected months
+function typeStores(type){
+  var months=(selMonths&&selMonths.length)?selMonths:[activeSheet];
+  var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value,mkEl=document.getElementById('sel-market'),mk=mkEl?mkEl.value:'';
+  var by={};
+  months.forEach(function(mo){var arr=(mo===activeSheet?raw:(monthCache[mo]||[]));arr.forEach(function(s){
+    var nm=(s.name||s.code||'').toUpperCase();if(nm.indexOf('WAREHOUSE')!==-1||nm.indexOf('GODOWN')!==-1)return;
+    if(rm&&s.rm!==rm)return;if(cm&&s.cm!==cm)return;if(cy&&s.city!==cy)return;if(mk&&mkt(s)!==mk)return;
+    if(type&&styp(s)!==type)return;
+    var k=s.code||s.name;if(!k)return;
+    if(!by[k])by[k]={code:s.code,name:s.name,rm:s.rm,cm:s.cm,target:0,mtdSales:0,projectedTotal:0};
+    var c=by[k];c.target+=s.target||0;c.mtdSales+=s.mtdSales||0;c.projectedTotal+=s.projectedTotal||0;
+  });});
+  return Object.keys(by).map(function(k){return by[k];});
+}
+// RM › CM › Store nested tree HTML for a store list
+function bifTreeHTML(data){
+  var R={};
+  data.forEach(function(s){var rm=s.rm||'?',cm=s.cm||'?';if(!R[rm])R[rm]={cms:{},t:0,s:0,p:0,n:0};if(!R[rm].cms[cm])R[rm].cms[cm]={stores:[],t:0,s:0,p:0};var C=R[rm].cms[cm];C.stores.push(s);C.t+=s.target;C.s+=s.mtdSales;C.p+=s.projectedTotal||0;R[rm].t+=s.target;R[rm].s+=s.mtdSales;R[rm].p+=s.projectedTotal||0;R[rm].n++;});
+  function pcell(t,v){var p=t?Math.round(v/t*100):0;return '<td class="r '+(t?pc(p):'')+'">'+(t?p+'%':'—')+'</td>';}
+  var gt=0,gs=0,gp=0,gn=0;
+  var rowsHtml=Object.keys(R).sort(function(a,b){return R[b].s-R[a].s;}).map(function(rm){
+    var r=R[rm];gt+=r.t;gs+=r.s;gp+=r.p;gn+=r.n;
+    var out='<tr style="background:var(--surface2);font-weight:800;"><td>'+rm+'</td><td class="r" style="color:#6b7280;">'+r.n+'</td><td class="r">'+L(r.t)+'</td><td class="r">'+L(r.s)+'</td>'+pcell(r.t,r.s)+'<td class="r">'+L(r.p)+'</td>'+pcell(r.t,r.p)+'</tr>';
+    out+=Object.keys(r.cms).sort(function(a,b){return r.cms[b].s-r.cms[a].s;}).map(function(cm){
+      var c=r.cms[cm];
+      var sub='<tr style="font-weight:700;background:rgba(59,130,246,.06);"><td style="padding-left:26px;">&#8627; '+cm+'</td><td class="r" style="color:#9ca3af;">'+c.stores.length+'</td><td class="r">'+L(c.t)+'</td><td class="r">'+L(c.s)+'</td>'+pcell(c.t,c.s)+'<td class="r">'+L(c.p)+'</td>'+pcell(c.t,c.p)+'</tr>';
+      sub+=c.stores.sort(function(a,b){return b.mtdSales-a.mtdSales;}).map(function(s){return '<tr><td style="padding-left:48px;font-weight:600;color:#3b82f6;">'+s.code+' <span style="font-size:9px;color:#9ca3af;font-weight:400;">'+styp(s)+'</span></td><td></td><td class="r">'+L(s.target)+'</td><td class="r">'+L(s.mtdSales)+'</td>'+pcell(s.target,s.mtdSales)+'<td class="r">'+L(s.projectedTotal||0)+'</td>'+pcell(s.target,s.projectedTotal||0)+'</tr>';}).join('');
+      return sub;
+    }).join('');
+    return out;
+  }).join('');
+  rowsHtml+='<tr class="ft" style="font-weight:800;"><td>Total</td><td class="r">'+gn+'</td><td class="r">'+L(gt)+'</td><td class="r">'+L(gs)+'</td>'+pcell(gt,gs)+'<td class="r">'+L(gp)+'</td>'+pcell(gt,gp)+'</tr>';
+  var th='padding:8px 12px;text-align:right;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;border-bottom:2px solid var(--border);';
+  return '<table style="width:100%;border-collapse:collapse;font-size:12px;">'+
+    '<thead><tr style="background:var(--surface2);position:sticky;top:0;z-index:1;">'+
+    '<th style="'+th+'text-align:left;">RM › CM › Store</th><th style="'+th+'">Stores</th><th style="'+th+'">Target</th><th style="'+th+'">MTD Sales</th><th style="'+th+'">Ach%</th><th style="'+th+'">Proj</th><th style="'+th+'">Proj%</th>'+
+    '</tr></thead><tbody>'+rowsHtml+'</tbody></table>';
+}
+// Chip drill: modal with the RM › CM › Store tree for a Type (or all)
+function openTypeDrill(type){
+  var data=typeStores(type),label=type||'All Stores';
+  var period=(selMonths&&selMonths.length>1)?selMonths.join('+'):activeSheet;
+  var tgt=data.reduce(function(a,s){return a+s.target;},0),sal=data.reduce(function(a,s){return a+s.mtdSales;},0);
+  var existing=document.getElementById('type-modal');if(existing)existing.remove();
+  var m=document.createElement('div');m.id='type-modal';
+  m.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+  var inner=document.createElement('div');
+  inner.style.cssText='background:var(--surface);border-radius:12px;width:100%;max-width:780px;margin:auto;box-shadow:0 25px 60px rgba(0,0,0,.4);border:1px solid var(--border);';
+  inner.innerHTML=
+    '<div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:12px 12px 0 0;">'+
+      '<div><div style="font-size:16px;font-weight:800;color:var(--text);">'+label+' &middot; RM › CM › Store</div>'+
+      '<div style="font-size:11px;color:var(--text2);margin-top:3px;">'+data.length+' stores · '+period+' · Target '+L(tgt)+' · Sales '+L(sal)+' · <b>'+(tgt?Math.round(sal/tgt*100):0)+'%</b></div></div>'+
+      '<div style="display:flex;gap:8px;align-items:center;">'+
+        (type?'<button id="type-filter-btn" style="font-size:11px;padding:6px 12px;border:1px solid var(--primary);border-radius:6px;background:var(--primary);color:#fff;cursor:pointer;">Filter Overview</button>':'')+
+        '<button id="type-modal-close" style="width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:16px;color:var(--text2);">&#215;</button>'+
+      '</div></div>'+
+    '<div style="padding:8px 16px 16px;"><div style="border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:70vh;">'+bifTreeHTML(data)+'</div></div>';
+  m.appendChild(inner);document.body.appendChild(m);
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  inner.querySelector('#type-modal-close').onclick=function(){m.remove();};
+  var fb=inner.querySelector('#type-filter-btn');if(fb)fb.onclick=function(){m.remove();setTypeFilter(type);};
 }
 function renderKPIs(){
   var el=document.getElementById('kpi-cards');var data=ovStores();if(!el||!data.length){if(el)el.innerHTML='';return;}
