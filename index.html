@@ -277,8 +277,8 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <label>City</label><select id="sel-city" onchange="applyFilter()"><option value="">All</option></select>
   <label>Market</label><select id="sel-market" onchange="applyFilter()"><option value="">All</option></select>
   <label>Type</label><select id="sel-type" onchange="applyFilter()"><option value="">All</option><option value="SSSG">SSSG</option><option value="LY Open">LY Open</option><option value="TY Open">TY Open</option></select>
-  <label>From</label><input type="date" id="dt-from" onchange="applyFilter()" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card,#fff);color:inherit;">
-  <label>To</label><input type="date" id="dt-to" onchange="applyFilter()" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card,#fff);color:inherit;">
+  <label>From</label><input type="date" id="dt-from" onchange="onDateChange()" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card,#fff);color:inherit;">
+  <label>To</label><input type="date" id="dt-to" onchange="onDateChange()" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card,#fff);color:inherit;">
   <label>Quarter</label>
   <select id="sel-qtr" onchange="applyFilter()">
     <option value="">All</option>
@@ -904,6 +904,28 @@ function rangeLabel(){if(!rangeActive())return'';function f(s){if(!s)return'…'
 function dayNum(month,dayIdx){var ym=FY_YM[month]||[2026,1];return ym[0]*10000+ym[1]*100+(dayIdx+1);}   // YYYYMMDD for day i (0-based)
 function strNum(s){if(!s)return null;var p=String(s).split('-');return parseInt(p[0],10)*10000+parseInt(p[1],10)*100+parseInt(p[2],10);}
 function dayInRange(month,dayIdx){if(!rangeActive())return true;var dn=dayNum(month,dayIdx),f=strNum(dateFrom),t=strNum(dateTo);if(f!=null&&dn<f)return false;if(t!=null&&dn>t)return false;return true;}
+// FY months the date range spans (so cross-month ranges auto-load both months)
+function monthsInRange(){
+  if(!rangeActive())return null;
+  var f=strNum(dateFrom),t=strNum(dateTo);
+  var fM=f!=null?Math.floor(f/100):(t!=null?Math.floor(t/100):null);
+  var tM=t!=null?Math.floor(t/100):(f!=null?Math.floor(f/100):null);
+  return ALL_MONTHS.filter(function(m){var ym=FY_YM[m],n=ym[0]*100+ym[1];return n>=fM&&n<=tM;});
+}
+// Date inputs changed → set the range AND auto-select the months it spans
+function onDateChange(){
+  var dfEl=document.getElementById('dt-from'),dtEl=document.getElementById('dt-to');
+  dateFrom=dfEl&&dfEl.value?dfEl.value:null;dateTo=dtEl&&dtEl.value?dtEl.value:null;
+  var ms=monthsInRange();
+  if(ms&&ms.length&&ms.join(',')!==selMonths.join(',')){
+    selMonths=ms.slice();activeSheet=selMonths[0];
+    localStorage.setItem('ka_sheet',activeSheet);localStorage.setItem('ka_months',JSON.stringify(selMonths));
+    updateMonthLabel();renderMonthPicker(window._lastSheets||[]);
+    raw=[];filtered=[];labels=[];
+    if(activeURL){connectTo(activeURL,activeSheet);return;}   // onData → applyFilter + fetchCombineMonths
+  }
+  applyFilter();
+}
 // Return stores with day arrays zeroed outside the date range and MTD metrics recomputed
 function applyDateRange(stores,month){
   if(!rangeActive())return stores||[];
