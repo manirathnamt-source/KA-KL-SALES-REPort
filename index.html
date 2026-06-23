@@ -274,6 +274,7 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   </details>
   <label>RM</label><select id="sel-rm" onchange="applyFilter()"><option value="">All</option></select>
   <label>CM</label><select id="sel-cm" onchange="applyFilter()"><option value="">All</option></select>
+  <label>Store</label><select id="sel-store" onchange="applyFilter()" style="max-width:200px;"><option value="">All</option></select>
   <label>City</label><select id="sel-city" onchange="applyFilter()"><option value="">All</option></select>
   <label>Market</label><select id="sel-market" onchange="applyFilter()"><option value="">All</option></select>
   <label>Type</label><select id="sel-type" onchange="applyFilter()"><option value="">All</option><option value="SSSG">SSSG</option><option value="LY Open">LY Open</option><option value="TY Open">TY Open</option></select>
@@ -1107,6 +1108,9 @@ function buildFilters(sheets){
   fill('sel-cm',[...new Set(raw.map(function(s){return s.cm;}))].filter(Boolean).sort());
   fill('sel-city',[...new Set(raw.map(function(s){return s.city;}))].filter(Boolean).sort());
   fill('sel-market',[...new Set(raw.map(mkt))].filter(Boolean).sort());
+  var stEl=document.getElementById('sel-store');
+  if(stEl){var v=stEl.value;var opts=raw.filter(function(s){var n=(s.name||s.code||'').toUpperCase();return n.indexOf('WAREHOUSE')===-1&&n.indexOf('GODOWN')===-1&&s.code;}).map(function(s){return {code:s.code,name:s.name||s.code};}).sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
+    stEl.innerHTML='<option value="">All</option>'+opts.map(function(o){return '<option value="'+o.code+'"'+(o.code===v?' selected':'')+'>'+o.name+'</option>';}).join('');}
   renderMonthPicker(sheets);
 }
 function fill(id,arr){var el=document.getElementById(id),v=el.value;el.innerHTML='<option value="">All</option>'+arr.map(function(a){return'<option value="'+a+'"'+(a===v?' selected':'')+'>'+a+'</option>';}).join('');}
@@ -1114,6 +1118,7 @@ function applyFilter(){
   var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value;
   var mkEl=document.getElementById('sel-market');var mk=mkEl?mkEl.value:'';
   var tyEl=document.getElementById('sel-type');var ty=tyEl?tyEl.value:'';
+  var stEl0=document.getElementById('sel-store');var st=stEl0?stEl0.value:'';
   var dfEl=document.getElementById('dt-from'),dtEl=document.getElementById('dt-to');
   dateFrom=dfEl&&dfEl.value?dfEl.value:null;dateTo=dtEl&&dtEl.value?dtEl.value:null;
   var qtrEl=document.getElementById('sel-qtr');
@@ -1123,14 +1128,14 @@ function applyFilter(){
   filtered=applyDateRange(raw,activeSheet).filter(function(s){
     var name=(s.name||s.code||'').toUpperCase();
     if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;
-    return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk)&&(!ty||styp(s)===ty);
+    return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk)&&(!ty||styp(s)===ty)&&(!st||s.code===st);
   });
   document.getElementById('fbadge').textContent=filtered.length+' stores · '+labels.length+'d · '+activeSheet+(rangeActive()?' · '+rangeLabel():'');
   renderAll();
   // Sync category tab if loaded
   if(catData) renderCat();
 }
-function resetFilter(){['sel-rm','sel-cm','sel-city','sel-market','sel-type','sel-qtr','dt-from','dt-to'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});dateFrom=null;dateTo=null;applyFilter();}
+function resetFilter(){['sel-rm','sel-cm','sel-store','sel-city','sel-market','sel-type','sel-qtr','dt-from','dt-to'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});dateFrom=null;dateTo=null;applyFilter();}
 
 // ═══════════════════════════════════════════
 // RENDER ALL
@@ -1152,7 +1157,8 @@ function summaryEntries(){
   var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value;
   var mkEl=document.getElementById('sel-market');var mk=mkEl?mkEl.value:'';
   var tyEl=document.getElementById('sel-type');var ty=tyEl?tyEl.value:'';
-  var pred=function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk)&&(!ty||styp(s)===ty);};
+  var stEl=document.getElementById('sel-store');var st=stEl?stEl.value:'';
+  var pred=function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk)&&(!ty||styp(s)===ty)&&(!st||s.code===st);};
   var out=[];
   selMonths.forEach(function(m){
     var arr=(m===activeSheet?raw:monthCache[m])||[];
@@ -1718,7 +1724,7 @@ function storeL2L(s,N){
 }
 // ── Multi-month combine: when >1 month is ticked, Overview & L2L sum across them ──
 function l2lWindow(stores){var maxLen=0;stores.forEach(function(s){if(s.daySales)maxLen=Math.max(maxLen,s.daySales.length);});var N=0;for(var i=0;i<maxLen;i++){var sm=0;stores.forEach(function(s){sm+=(s.daySales&&s.daySales[i])||0;});if(sm>0)N=i+1;}return N;}
-function curPred(){var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value,mkEl=document.getElementById('sel-market'),mkv=mkEl?mkEl.value:'',tyEl=document.getElementById('sel-type'),tyv=tyEl?tyEl.value:'';return function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mkv||mkt(s)===mkv)&&(!tyv||styp(s)===tyv);};}
+function curPred(){var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value,mkEl=document.getElementById('sel-market'),mkv=mkEl?mkEl.value:'',tyEl=document.getElementById('sel-type'),tyv=tyEl?tyEl.value:'',stEl=document.getElementById('sel-store'),stv=stEl?stEl.value:'';return function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mkv||mkt(s)===mkv)&&(!tyv||styp(s)===tyv)&&(!stv||s.code===stv);};}
 // Combined per-store records across the selected months (totals summed, rates recomputed,
 // rate-targets averaged) plus pre-summed like-for-like (_ty/_ly) per month window.
 function aggStores(){
