@@ -1777,6 +1777,40 @@ function renderL2L(){
 // ═══════════════════════════════════════════
 // LOSS REASON ANALYSIS — lost-enquiry log (Karnataka & Kerala stores only)
 // ═══════════════════════════════════════════
+// Drill: clicking a Reason/Sub-reason/Category shows which stores drove it
+function openLossDrill(idx){
+  var rows=window._lrRows||[],dim=window._lrDim,months=window._lrMonths||[activeSheet];
+  var row=rows[idx];if(!row)return;
+  var value=row.k,scope=lossScope();
+  var per=[];
+  Object.keys(scope).forEach(function(code){
+    var cnt=0;months.forEach(function(m){var d=LOSS_DATA&&LOSS_DATA[m]&&LOSS_DATA[m][code];if(d&&d[dim]&&d[dim][value])cnt+=d[dim][value];});
+    if(cnt>0){var s=scope[code];per.push({code:code,rm:s.rm,cm:s.cm,market:mkt(s),v:cnt});}
+  });
+  per.sort(function(a,b){return b.v-a.v;});
+  var total=per.reduce(function(a,r){return a+r.v;},0),max=per.length?per[0].v:1;
+  var DIMLBL={reason:'Reason',sub:'Sub-reason',cat:'Category'}[dim]||dim;
+  var existing=document.getElementById('lossdrill-modal');if(existing)existing.remove();
+  var m=document.createElement('div');m.id='lossdrill-modal';
+  m.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+  var inner=document.createElement('div');
+  inner.style.cssText='background:var(--surface);border-radius:12px;width:100%;max-width:640px;margin:auto;box-shadow:0 25px 60px rgba(0,0,0,.4);border:1px solid var(--border);';
+  var period=(selMonths&&selMonths.length>1)?selMonths.join('+'):activeSheet;
+  var rowsHtml=per.map(function(r){var pct=total?Math.round(r.v/total*100):0,w=max?Math.round(r.v/max*100):0;
+    return '<tr style="cursor:pointer;" onclick="document.getElementById(\'lossdrill-modal\').remove();openDrill(\''+r.code+'\')"><td style="padding:6px 12px;font-weight:700;color:#3b82f6;border-bottom:1px solid var(--border);">'+r.code+'</td><td style="padding:6px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);">'+(r.rm||'')+'</td><td style="padding:6px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);">'+(r.market||'')+'</td><td style="padding:6px 12px;text-align:right;font-weight:700;color:#dc2626;border-bottom:1px solid var(--border);">'+N(r.v)+'</td><td style="padding:6px 12px;text-align:right;border-bottom:1px solid var(--border);">'+pct+'%</td><td style="padding:6px 12px;border-bottom:1px solid var(--border);min-width:90px;"><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden;"><div style="width:'+w+'%;height:100%;background:#dc2626;border-radius:4px;"></div></div></td></tr>';
+  }).join('');
+  inner.innerHTML=
+    '<div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:12px 12px 0 0;">'+
+      '<div><div style="font-size:15px;font-weight:800;color:var(--text);">'+value+'</div>'+
+      '<div style="font-size:11px;color:var(--text2);margin-top:3px;">'+DIMLBL+' · '+period+' · '+N(total)+' losses across '+per.length+' stores · KA & KL</div></div>'+
+      '<button id="lossdrill-close" style="width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:16px;color:var(--text2);">&#215;</button>'+
+    '</div>'+
+    '<div style="padding:8px 16px 16px;"><div style="border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:64vh;"><table style="width:100%;border-collapse:collapse;font-size:12px;">'+
+    '<thead><tr style="background:var(--surface2);position:sticky;top:0;"><th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;border-bottom:2px solid var(--border);">Store</th><th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;border-bottom:2px solid var(--border);">RM</th><th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;border-bottom:2px solid var(--border);">Market</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;border-bottom:2px solid var(--border);">Losses</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;border-bottom:2px solid var(--border);">%</th><th style="padding:8px 12px;border-bottom:2px solid var(--border);">Share</th></tr></thead><tbody>'+rowsHtml+'</tbody></table></div></div>';
+  m.appendChild(inner);document.body.appendChild(m);
+  m.onclick=function(e){if(e.target===m)m.remove();};
+  inner.querySelector('#lossdrill-close').onclick=function(){m.remove();};
+}
 var LOSS_DIM='reason';
 function setLossDim(d){
   LOSS_DIM=d;
@@ -1832,12 +1866,13 @@ function renderLossReason(){
     }
   }
   function bar(v){var w=max?Math.round(v/max*100):0;return '<td style="min-width:120px;"><div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;"><div style="width:'+w+'%;height:100%;background:#dc2626;border-radius:4px;"></div></div></td>';}
-  body.innerHTML=(rows.length?rows.map(function(r){
+  window._lrRows=rows;window._lrDim=LOSS_DIM;window._lrMonths=months;   // for the drill
+  body.innerHTML=(rows.length?rows.map(function(r,i){
     var pct=grandTotal?Math.round(r.v/grandTotal*100):0;
     if(LOSS_DIM==='store'){
-      return '<tr style="cursor:pointer;" onclick="openDrill(\''+r.k+'\')"><td style="font-weight:700;color:#3b82f6;">'+r.k+'</td><td>'+(r.rm||'')+'</td><td>'+(r.market||'')+'</td><td class="r" style="font-weight:700;color:#dc2626;">'+N(r.v)+'</td><td class="r">'+pct+'%</td>'+bar(r.v)+'</tr>';
+      return '<tr style="cursor:pointer;" onclick="openDrill(\''+r.k+'\')" title="Open store detail"><td style="font-weight:700;color:#3b82f6;">'+r.k+'</td><td>'+(r.rm||'')+'</td><td>'+(r.market||'')+'</td><td class="r" style="font-weight:700;color:#dc2626;">'+N(r.v)+'</td><td class="r">'+pct+'%</td>'+bar(r.v)+'</tr>';
     }
-    return '<tr><td style="font-weight:600;">'+r.k+'</td><td class="r" style="font-weight:700;color:#dc2626;">'+N(r.v)+'</td><td class="r">'+pct+'%</td>'+bar(r.v)+'</tr>';
+    return '<tr style="cursor:pointer;" onclick="openLossDrill('+i+')" title="Click to see stores driving this"><td style="font-weight:600;color:#3b82f6;">'+r.k+' <span style="font-size:9px;color:#9ca3af;">&#9656;</span></td><td class="r" style="font-weight:700;color:#dc2626;">'+N(r.v)+'</td><td class="r">'+pct+'%</td>'+bar(r.v)+'</tr>';
   }).join('')
     : '<tr><td colspan="'+(LOSS_DIM==='store'?6:4)+'" style="text-align:center;color:#9ca3af;padding:18px;">'+(LOSS_DATA?'No loss data for this selection (only APR/MAY/JUN available).':'Loading…')+'</td></tr>')+
   (rows.length?'<tr class="ft"><td'+(LOSS_DIM==='store'?' colspan="3"':'')+'>Total</td><td class="r" style="font-weight:700;color:#dc2626;">'+N(grandTotal)+'</td><td class="r">100%</td><td></td></tr>':'');
