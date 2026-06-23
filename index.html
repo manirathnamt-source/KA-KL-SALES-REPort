@@ -277,6 +277,8 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <label>City</label><select id="sel-city" onchange="applyFilter()"><option value="">All</option></select>
   <label>Market</label><select id="sel-market" onchange="applyFilter()"><option value="">All</option></select>
   <label>Type</label><select id="sel-type" onchange="applyFilter()"><option value="">All</option><option value="SSSG">SSSG</option><option value="LY Open">LY Open</option><option value="TY Open">TY Open</option></select>
+  <label>From</label><input type="date" id="dt-from" onchange="applyFilter()" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card,#fff);color:inherit;">
+  <label>To</label><input type="date" id="dt-to" onchange="applyFilter()" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card,#fff);color:inherit;">
   <label>Quarter</label>
   <select id="sel-qtr" onchange="applyFilter()">
     <option value="">All</option>
@@ -894,6 +896,35 @@ function mkt(s){var n=((s&&s.name)||'').trim();var i=n.indexOf(' - ');if(i>0)ret
 // Store Type bifurcation from "Tar Vs Ach" — SSSG (comparable), LY Open (opened last FY), TY Open (new this FY)
 var STORE_TYPE={"BLR4JN":"LY Open","BLRFSB":"SSSG","BLRHSR":"SSSG","BLRKGP":"SSSG","BLRRMM":"SSSG","BLRRRN":"SSSG","KCHFRM":"SSSG","KCHLUL":"SSSG","KCHMGR":"SSSG","TRVLUL":"SSSG","BLRBSW":"SSSG","BLRDVG":"SSSG","BLRJAY":"SSSG","BLRNKM":"LY Open","BLRSMR":"TY Open","BLRVGA":"SSSG","MGLBMT":"SSSG","MGLCCM":"SSSG","MGLNFM":"LY Open","MYSDUR":"SSSG","MYSMOM":"SSSG","MYSNEX":"SSSG","UDPMMT":"SSSG","BLRARS":"SSSG","BLRSNK":"SSSG","BLRGRD":"SSSG","BLRIND":"SSSG","BLRKRP":"LY Open","BLRMAL":"SSSG","BLRMNT":"SSSG","BLRORN":"SSSG","BLRWPX":"SSSG","BLRWMR":"TY Open","HSPVCR":"LY Open","BGMABR":"SSSG","BGMMPR":"TY Open","BLRBEL":"SSSG","BLRCST":"SSSG","BLRHNR":"SSSG","BLRKHL":"SSSG","BLRMOA":"SSSG","BLRRMZ":"SSSG","BLRSKR":"SSSG","HBLGKR":"LY Open","HBLKPR":"SSSG","BLRBRO":"TY Open"};
 function styp(s){return STORE_TYPE[((s&&s.code)||'').toUpperCase()]||'—';}
+// ── Date range (From–To) ── FY 2026-27: APR-DEC = 2026, JAN-MAR = 2027
+var FY_YM={APR:[2026,4],MAY:[2026,5],JUN:[2026,6],JUL:[2026,7],AUG:[2026,8],SEP:[2026,9],OCT:[2026,10],NOV:[2026,11],DEC:[2026,12],JAN:[2027,1],FEB:[2027,2],MAR:[2027,3]};
+var dateFrom=null,dateTo=null;   // 'YYYY-MM-DD' or null
+function rangeActive(){return !!(dateFrom||dateTo);}
+function rangeLabel(){if(!rangeActive())return'';function f(s){if(!s)return'…';var p=s.split('-');return p[2]+'-'+['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(p[1],10)];}return f(dateFrom)+' → '+f(dateTo);}
+function dayNum(month,dayIdx){var ym=FY_YM[month]||[2026,1];return ym[0]*10000+ym[1]*100+(dayIdx+1);}   // YYYYMMDD for day i (0-based)
+function strNum(s){if(!s)return null;var p=String(s).split('-');return parseInt(p[0],10)*10000+parseInt(p[1],10)*100+parseInt(p[2],10);}
+function dayInRange(month,dayIdx){if(!rangeActive())return true;var dn=dayNum(month,dayIdx),f=strNum(dateFrom),t=strNum(dateTo);if(f!=null&&dn<f)return false;if(t!=null&&dn>t)return false;return true;}
+// Return stores with day arrays zeroed outside the date range and MTD metrics recomputed
+function applyDateRange(stores,month){
+  if(!rangeActive())return stores||[];
+  return (stores||[]).map(function(s){
+    var ds=s.daySales||[],db=s.dayBills||[],dw=s.dayWalkIns,dq=s.dayQty,n=ds.length;
+    var nds=[],ndb=[],ndw=dw?[]:null,ndq=dq?[]:null;
+    for(var i=0;i<n;i++){var ir=dayInRange(month,i);nds.push(ir?(ds[i]||0):0);ndb.push(ir?(db[i]||0):0);if(dw)ndw.push(ir?(dw[i]||0):0);if(dq)ndq.push(ir?(dq[i]||0):0);}
+    var sales=nds.reduce(function(a,b){return a+b;},0),bills=ndb.reduce(function(a,b){return a+b;},0);
+    var walk=ndw?ndw.reduce(function(a,b){return a+b;},0):(s.mtdWalkIns||0),qty=ndq?ndq.reduce(function(a,b){return a+b;},0):(s.mtdSoldQty||0);
+    var dw2=nds.filter(function(v){return v>0;}).length||1,total=n||30;
+    var proj=Math.round(sales/dw2*total);
+    var c=Object.assign({},s,{daySales:nds,dayBills:ndb,mtdSales:sales,mtdBills:bills,mtdWalkIns:walk,mtdSoldQty:qty,daysCount:dw2,projectedTotal:proj});
+    if(dw)c.dayWalkIns=ndw;if(dq)c.dayQty=ndq;
+    c.pct=s.target?Math.round(sales/s.target*100):0;
+    c.trendingPct=s.target?Math.round(proj/s.target*100):0;
+    c.convActual=walk?Math.round(bills/walk*1000)/10:0;
+    c.abv=bills?Math.round(sales/bills):0;
+    c.upt=bills?Math.round(qty/bills*100)/100:0;
+    return c;
+  });
+}
 function pc(p){return p>=100?'gv':p>=85?'av':'rv';}
 
 // ═══════════════════════════════════════════
@@ -1061,21 +1092,23 @@ function applyFilter(){
   var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value;
   var mkEl=document.getElementById('sel-market');var mk=mkEl?mkEl.value:'';
   var tyEl=document.getElementById('sel-type');var ty=tyEl?tyEl.value:'';
+  var dfEl=document.getElementById('dt-from'),dtEl=document.getElementById('dt-to');
+  dateFrom=dfEl&&dfEl.value?dfEl.value:null;dateTo=dtEl&&dtEl.value?dtEl.value:null;
   var qtrEl=document.getElementById('sel-qtr');
   var qtr=qtrEl?qtrEl.value:'';
   var qtrMonths={Q1:['APR','MAY','JUN'],Q2:['JUL','AUG','SEP'],Q3:['OCT','NOV','DEC'],Q4:['JAN','FEB','MAR']};
   // Quarter filter applies to YTD tab only — for monthly tabs it's used to highlight
-  filtered=raw.filter(function(s){
+  filtered=applyDateRange(raw,activeSheet).filter(function(s){
     var name=(s.name||s.code||'').toUpperCase();
     if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;
     return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk)&&(!ty||styp(s)===ty);
   });
-  document.getElementById('fbadge').textContent=filtered.length+' stores · '+labels.length+'d · '+activeSheet;
+  document.getElementById('fbadge').textContent=filtered.length+' stores · '+labels.length+'d · '+activeSheet+(rangeActive()?' · '+rangeLabel():'');
   renderAll();
   // Sync category tab if loaded
   if(catData) renderCat();
 }
-function resetFilter(){['sel-rm','sel-cm','sel-city','sel-market','sel-type','sel-qtr'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});applyFilter();}
+function resetFilter(){['sel-rm','sel-cm','sel-city','sel-market','sel-type','sel-qtr','dt-from','dt-to'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});dateFrom=null;dateTo=null;applyFilter();}
 
 // ═══════════════════════════════════════════
 // RENDER ALL
@@ -1649,9 +1682,15 @@ function l2lElapsed(){            // N = number of elapsed dates this month (reg
 function storeL2L(s,N){
   if(N==null)N=l2lElapsed();
   var ly=L2L_DATA?L2L_DATA[activeSheet]:null;
-  var ty=(s.daySales||[]).slice(0,N).reduce(function(a,b){return a+b;},0);
   var lyArr=ly?ly[(s.code||'').toUpperCase()]:null;
-  var lyv=lyArr?lyArr.slice(0,N).reduce(function(a,b){return a+b;},0):null;
+  var ty,lyv;
+  if(rangeActive()){
+    ty=0;lyv=lyArr?0:null;var ds=s.daySales||[];
+    for(var i=0;i<ds.length;i++){if(dayInRange(activeSheet,i)){ty+=ds[i]||0;if(lyArr)lyv+=lyArr[i]||0;}}
+  } else {
+    ty=(s.daySales||[]).slice(0,N).reduce(function(a,b){return a+b;},0);
+    lyv=lyArr?lyArr.slice(0,N).reduce(function(a,b){return a+b;},0):null;
+  }
   var g=(lyv&&lyv>0)?Math.round((ty-lyv)/lyv*100):null;
   return {ty:ty,ly:lyv,g:g};
 }
@@ -1664,7 +1703,7 @@ function aggStores(){
   var months=(selMonths&&selMonths.length)?selMonths:[activeSheet];
   var pred=curPred(),by={};
   months.forEach(function(m){
-    var stores=(m===activeSheet?raw:(monthCache[m]||[]));if(!stores.length)return;
+    var stores=applyDateRange((m===activeSheet?raw:(monthCache[m]||[])),m);if(!stores.length)return;
     var ly=L2L_DATA?L2L_DATA[m]:null,N=l2lWindow(stores);
     stores.filter(pred).forEach(function(s){
       var k=(s.code||s.name);if(!k)return;
@@ -1672,8 +1711,9 @@ function aggStores(){
       var c=by[k],kt=s.kpiTargets||{};
       c.target+=s.target||0;c.mtdSales+=s.mtdSales||0;c.projectedTotal+=s.projectedTotal||0;c.mtdBills+=s.mtdBills||0;c.mtdWalkIns+=s.mtdWalkIns||0;c.mtdSoldQty+=s.mtdSoldQty||0;c.daysCount=Math.max(c.daysCount,s.daysCount||0);c._tn++;
       c.kpiTargets.walkIns+=kt.walkIns||0;c.kpiTargets.bills+=kt.bills||0;c.kpiTargets.conversion+=kt.conversion||0;c.kpiTargets.abv+=kt.abv||0;c.kpiTargets.upt+=kt.upt||0;
-      var ty=(s.daySales||[]).slice(0,N).reduce(function(a,b){return a+b;},0);
-      var arr=ly?ly[(s.code||'').toUpperCase()]:null,lyv=arr?arr.slice(0,N).reduce(function(a,b){return a+b;},0):null;
+      var arr=ly?ly[(s.code||'').toUpperCase()]:null,ty,lyv;
+      if(rangeActive()){ty=0;lyv=arr?0:null;var dsr=s.daySales||[];for(var ii=0;ii<dsr.length;ii++){if(dayInRange(m,ii)){ty+=dsr[ii]||0;if(arr)lyv+=arr[ii]||0;}}}
+      else {ty=(s.daySales||[]).slice(0,N).reduce(function(a,b){return a+b;},0);lyv=arr?arr.slice(0,N).reduce(function(a,b){return a+b;},0):null;}
       c._ty+=ty;if(lyv!=null){c._ly+=lyv;c._lyHas=true;}
     });
   });
@@ -1742,7 +1782,7 @@ function renderL2L(){
       kc('Growing', grow+'', unit, 'gv')+
       kc('De-growing', degrow+'', unit, 'rv');
   }
-  var period=multi?selMonths.join('+'):(month+' 1–'+N);
+  var period=rangeActive()?(month+' '+rangeLabel()):(multi?selMonths.join('+'):(month+' 1–'+N));
   var note=!L2L_DATA?'  ·  loading last-year data…':(!multi&&!ly?'  ·  no last-year data for '+month:'');
   document.getElementById('l2l-title').textContent='Like-for-Like ('+vlabel+') · '+period+' vs FY25-26'+note;
   // dynamic header
