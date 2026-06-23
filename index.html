@@ -297,6 +297,7 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <div class="tab" onclick="showTab('weekly',this)">&#128198; Weekly</div>
   <div class="tab" onclick="showTab('l2l',this)">&#128200; L2L</div>
   <div class="tab" onclick="showTab('los',this)">&#128184; Loss of Sale</div>
+  <div class="tab" onclick="showTab('bif',this)">&#128203; Bifurcation</div>
     <div class="tab" onclick="showTab('ytd',this)">&#128337; YTD</div>
 <div class="tab warn" onclick="showTab('kpialerts',this)">&#9888; KPI Alerts</div>
   <div class="tab danger" onclick="showTab('audit',this)">&#128270; Audit</div>
@@ -410,6 +411,14 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <div class="krow" id="los-cards"></div>
   <div class="sh"><span class="sh-t" id="los-title">Loss of Sale</span><div class="sh-l"></div></div>
   <div class="tw"><table id="t-los"><thead id="los-thead"></thead><tbody id="b-los"></tbody></table></div>
+</div>
+
+<!-- BIFURCATION (RM › CM › Store target vs achievement) -->
+<div class="panel" id="panel-bif">
+  <div class="sh"><span class="sh-t" id="bif-title">Bifurcation</span><div class="sh-l"></div><button class="dl" onclick="dlT('t-bif','Bifurcation')">&#8595; CSV</button></div>
+  <div class="tw"><table id="t-bif"><thead><tr>
+    <th onclick="srt('t-bif',0)">RM &#8250; CM &#8250; Store</th><th class="r" onclick="srt('t-bif',1)">Stores</th><th class="r" onclick="srt('t-bif',2)">Target</th><th class="r" onclick="srt('t-bif',3)">MTD Sales</th><th class="r" onclick="srt('t-bif',4)">Ach%</th><th class="r" onclick="srt('t-bif',5)">Projection</th><th class="r" onclick="srt('t-bif',6)">Proj%</th>
+  </tr></thead><tbody id="b-bif"></tbody></table></div>
 </div>
 
 <!-- YTD -->
@@ -1072,7 +1081,7 @@ function renderAll(){
   renderKPIs();renderGroup('rm','b-rm');renderGroup('cm','b-cm');
   renderSummary();
   renderStores();renderDaywise();renderMTD();renderWK(activeWK);
-  renderL2L();renderLOS();renderKPIAlerts();renderAudit();
+  renderL2L();renderLOS();renderBif();renderKPIAlerts();renderAudit();
 }
 
 // ═══════════════════════════════════════════
@@ -1754,6 +1763,50 @@ function renderLOS(){
   (grouped
     ? '<tr class="ft"><td>Region</td><td class="r">'+rows.reduce(function(a,r){return a+r.n;},0)+'</td><td class="r" style="font-weight:700;color:#dc2626;">'+N(tTot)+'</td><td class="r">'+N(tPA)+'</td><td class="r">'+N(tPR)+'</td><td class="r">'+N(tOther)+'</td><td class="r" style="color:#dc2626;">'+L(tEst)+'</td></tr>'
     : '<tr class="ft"><td colspan="4">Region ('+rows.length+')</td><td class="r" style="font-weight:700;color:#dc2626;">'+N(tTot)+'</td><td class="r">'+N(tPA)+'</td><td class="r">'+N(tPR)+'</td><td class="r">'+N(tOther)+'</td><td class="r" style="color:#dc2626;">'+L(tEst)+'</td></tr>');
+}
+
+// ═══════════════════════════════════════════
+// BIFURCATION — RM › CM › Store target vs achievement (nested tree)
+// ═══════════════════════════════════════════
+function renderBif(){
+  var body=document.getElementById('b-bif');if(!body)return;
+  var data=ovStores();
+  var R={};
+  data.forEach(function(s){
+    var rm=s.rm||'?',cm=s.cm||'?';
+    if(!R[rm])R[rm]={cms:{},t:0,s:0,p:0,n:0};
+    if(!R[rm].cms[cm])R[rm].cms[cm]={stores:[],t:0,s:0,p:0};
+    var C=R[rm].cms[cm];C.stores.push(s);C.t+=s.target;C.s+=s.mtdSales;C.p+=s.projectedTotal||0;
+    R[rm].t+=s.target;R[rm].s+=s.mtdSales;R[rm].p+=s.projectedTotal||0;R[rm].n++;
+  });
+  function ach(t,v){return t?Math.round(v/t*100):0;}
+  function pcell(t,v){var p=ach(t,v);return '<td class="r '+(t?pc(p):'')+'">'+(t?p+'%':'—')+'</td>';}
+  var gt=0,gs=0,gp=0,gn=0;
+  var html=Object.keys(R).sort(function(a,b){return R[b].s-R[a].s;}).map(function(rm){
+    var r=R[rm];gt+=r.t;gs+=r.s;gp+=r.p;gn+=r.n;
+    var out='<tr style="background:var(--surface2);font-weight:800;">'+
+      '<td>'+rm+'</td><td class="r" style="color:#6b7280;">'+r.n+'</td>'+
+      '<td class="r">'+L(r.t)+'</td><td class="r">'+L(r.s)+'</td>'+pcell(r.t,r.s)+
+      '<td class="r">'+L(r.p)+'</td>'+pcell(r.t,r.p)+'</tr>';
+    out+=Object.keys(r.cms).sort(function(a,b){return r.cms[b].s-r.cms[a].s;}).map(function(cm){
+      var c=r.cms[cm];
+      var sub='<tr style="font-weight:700;background:rgba(59,130,246,.06);">'+
+        '<td style="padding-left:26px;">&#8627; '+cm+'</td><td class="r" style="color:#9ca3af;">'+c.stores.length+'</td>'+
+        '<td class="r">'+L(c.t)+'</td><td class="r">'+L(c.s)+'</td>'+pcell(c.t,c.s)+
+        '<td class="r">'+L(c.p)+'</td>'+pcell(c.t,c.p)+'</tr>';
+      sub+=c.stores.sort(function(a,b){return b.mtdSales-a.mtdSales;}).map(function(s){
+        return '<tr style="cursor:pointer;" onclick="openDrill(\''+s.code+'\')">'+
+          '<td style="padding-left:48px;font-weight:600;color:#3b82f6;">'+s.code+'</td><td></td>'+
+          '<td class="r">'+L(s.target)+'</td><td class="r">'+L(s.mtdSales)+'</td>'+pcell(s.target,s.mtdSales)+
+          '<td class="r">'+L(s.projectedTotal||0)+'</td>'+pcell(s.target,s.projectedTotal||0)+'</tr>';
+      }).join('');
+      return sub;
+    }).join('');
+    return out;
+  }).join('');
+  html+='<tr class="ft"><td>Total</td><td class="r">'+gn+'</td><td class="r">'+L(gt)+'</td><td class="r">'+L(gs)+'</td>'+pcell(gt,gs)+'<td class="r">'+L(gp)+'</td>'+pcell(gt,gp)+'</tr>';
+  body.innerHTML=html||'<tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:18px;">No data.</td></tr>';
+  document.getElementById('bif-title').textContent='Target vs Achievement — RM › CM › Store · '+((selMonths&&selMonths.length>1)?selMonths.join('+'):activeSheet);
 }
 
 // ═══════════════════════════════════════════
