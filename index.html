@@ -303,7 +303,7 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <div class="tab" onclick="showTab('mtd',this)">&#128202; MTD</div>
   <div class="tab" onclick="showTab('weekly',this)">&#128198; Weekly</div>
   <div class="tab" onclick="showTab('l2l',this)">&#128200; L2L</div>
-  <div class="tab" onclick="showTab('los',this)">&#128184; Loss of Sale</div>
+  <div class="tab" onclick="showTab('lr',this)">&#128202; Loss Reason Analysis</div>
     <div class="tab" onclick="showTab('ytd',this)">&#128337; YTD</div>
 <div class="tab warn" onclick="showTab('kpialerts',this)">&#9888; KPI Alerts</div>
   <div class="tab danger" onclick="showTab('audit',this)">&#128270; Audit</div>
@@ -404,20 +404,20 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <div class="tw"><table id="t-l2l"><thead id="l2l-thead"></thead><tbody id="b-l2l"></tbody></table></div>
 </div>
 
-<!-- LOSS OF SALE (non-converted walk-ins × ABV) -->
-<div class="panel" id="panel-los">
+<!-- LOSS REASON ANALYSIS (lost-enquiry log, Karnataka & Kerala only) -->
+<div class="panel" id="panel-lr">
   <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
-    <span style="font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">View:</span>
-    <button id="losv-store" class="wkbtn active" onclick="setLOSView('store')">Store</button>
-    <button id="losv-rm" class="wkbtn" onclick="setLOSView('rm')">RM</button>
-    <button id="losv-cm" class="wkbtn" onclick="setLOSView('cm')">CM</button>
-    <button id="losv-market" class="wkbtn" onclick="setLOSView('market')">Market</button>
+    <span style="font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Analyse by:</span>
+    <button id="lr-reason" class="wkbtn active" onclick="setLossDim('reason')">Reason</button>
+    <button id="lr-sub" class="wkbtn" onclick="setLossDim('sub')">Sub-reason</button>
+    <button id="lr-cat" class="wkbtn" onclick="setLossDim('cat')">Category</button>
+    <button id="lr-store" class="wkbtn" onclick="setLossDim('store')">By Store</button>
     <div style="flex:1"></div>
-    <button class="dl" onclick="dlT('t-los','LossOfSale')">&#8595; CSV</button>
+    <button class="dl" onclick="dlT('t-lr','LossReasonAnalysis')">&#8595; CSV</button>
   </div>
-  <div class="krow" id="los-cards"></div>
-  <div class="sh"><span class="sh-t" id="los-title">Loss of Sale</span><div class="sh-l"></div></div>
-  <div class="tw"><table id="t-los"><thead id="los-thead"></thead><tbody id="b-los"></tbody></table></div>
+  <div class="krow" id="lr-cards"></div>
+  <div class="sh"><span class="sh-t" id="lr-title">Loss Reason Analysis</span><div class="sh-l"></div></div>
+  <div class="tw"><table id="t-lr"><thead id="lr-thead"></thead><tbody id="b-lr"></tbody></table></div>
 </div>
 
 <!-- YTD -->
@@ -1084,7 +1084,7 @@ function renderAll(){
   renderTypeChips();renderKPIs();renderGroup('rm','b-rm');renderGroup('cm','b-cm');
   renderSummary();
   renderStores();renderDaywise();renderMTD();renderWK(activeWK);
-  renderL2L();renderLOS();renderKPIAlerts();renderAudit();
+  renderL2L();renderLossReason();renderKPIAlerts();renderAudit();
 }
 
 // ═══════════════════════════════════════════
@@ -1775,76 +1775,72 @@ function renderL2L(){
 }
 
 // ═══════════════════════════════════════════
-// LOSS OF SALE — (Walk-ins − Bills) × ABV
-// Estimated revenue lost from footfall that didn't convert to a bill.
+// LOSS REASON ANALYSIS — lost-enquiry log (Karnataka & Kerala stores only)
 // ═══════════════════════════════════════════
-var LOS_VIEW='store';
-function setLOSView(v){
-  LOS_VIEW=v;
-  ['store','rm','cm','market'].forEach(function(k){var b=document.getElementById('losv-'+k);if(b)b.classList.toggle('active',k===v);});
-  renderLOS();
+var LOSS_DIM='reason';
+function setLossDim(d){
+  LOSS_DIM=d;
+  ['reason','sub','cat','store'].forEach(function(k){var b=document.getElementById('lr-'+k);if(b)b.classList.toggle('active',k===d);});
+  renderLossReason();
 }
-// Lost-sale incidents for a store code, summed across selected months
-function lossOf(code){
+// codes currently in scope (respects RM/CM/Market/Type filters), and their store objects
+function lossScope(){var by={};ovStores().forEach(function(s){by[(s.code||'').toUpperCase()]=s;});return by;}
+function renderLossReason(){
+  var body=document.getElementById('b-lr');if(!body)return;
   var months=(selMonths&&selMonths.length)?selMonths:[activeSheet];
-  var total=0,reasons={};
-  months.forEach(function(m){var d=(LOSS_DATA&&LOSS_DATA[m])?LOSS_DATA[m][(code||'').toUpperCase()]:null;if(!d)return;total+=d.total;Object.keys(d.r).forEach(function(rk){reasons[rk]=(reasons[rk]||0)+d.r[rk];});});
-  return {total:total,reasons:reasons};
-}
-function renderLOS(){
-  var body=document.getElementById('b-los');if(!body)return;
-  var perStore=ovStores().map(function(s){
-    var lo=lossOf(s.code),abv=s.abv||0;
-    var pa=lo.reasons['Product Availability']||0,pr=lo.reasons['Pricing Concerns']||0;
-    return {s:s,total:lo.total,pa:pa,pr:pr,other:Math.max(0,lo.total-pa-pr),est:lo.total*abv};
-  });
-  var grouped=(LOS_VIEW!=='store');
-  var rows;
-  if(!grouped){
-    rows=perStore.map(function(r){return {label:r.s.code,rm:r.s.rm,cm:r.s.cm,market:mkt(r.s),code:r.s.code,total:r.total,pa:r.pa,pr:r.pr,other:r.other,est:r.est,n:1};});
-  } else {
-    var keyFn=LOS_VIEW==='rm'?function(r){return r.s.rm||'?';}:LOS_VIEW==='cm'?function(r){return r.s.cm||'?';}:function(r){return mkt(r.s)||'?';};
-    var G={};
-    perStore.forEach(function(r){var k=keyFn(r);if(!G[k])G[k]={label:k,total:0,pa:0,pr:0,other:0,est:0,n:0};var g=G[k];g.total+=r.total;g.pa+=r.pa;g.pr+=r.pr;g.other+=r.other;g.est+=r.est;g.n++;});
-    rows=Object.keys(G).map(function(k){return G[k];});
-  }
-  rows.sort(function(a,b){return b.total-a.total;});
-  var tTot=0,tPA=0,tPR=0,tOther=0,tEst=0;rows.forEach(function(r){tTot+=r.total;tPA+=r.pa;tPR+=r.pr;tOther+=r.other;tEst+=r.est;});
-  var vlabel={store:'Store',rm:'RM',cm:'CM',market:'Market'}[LOS_VIEW];
+  var scope=lossScope();
   var period=(selMonths&&selMonths.length>1)?selMonths.join('+'):activeSheet;
-  var cards=document.getElementById('los-cards');
+  // aggregate the chosen dimension across in-scope stores + selected months
+  var agg={},grandTotal=0,storeTot={},reasonTot={};
+  months.forEach(function(m){var md=LOSS_DATA&&LOSS_DATA[m];if(!md)return;
+    Object.keys(scope).forEach(function(code){var d=md[code];if(!d)return;
+      grandTotal+=d.total;storeTot[code]=(storeTot[code]||0)+d.total;
+      (function(rm){Object.keys(rm).forEach(function(k){reasonTot[k]=(reasonTot[k]||0)+rm[k];});})(d.reason||{});
+      if(LOSS_DIM!=='store'){var dim=d[LOSS_DIM]||{};Object.keys(dim).forEach(function(k){agg[k]=(agg[k]||0)+dim[k];});}
+    });
+  });
+  var DIMLBL={reason:'Reason',sub:'Sub-reason',cat:'Category',store:'Store'}[LOSS_DIM];
+  var rows;
+  if(LOSS_DIM==='store'){
+    rows=Object.keys(storeTot).map(function(code){var s=scope[code];return {k:code,v:storeTot[code],rm:s?s.rm:'',market:s?mkt(s):''};});
+  } else {
+    rows=Object.keys(agg).map(function(k){return {k:k,v:agg[k]};});
+  }
+  rows.sort(function(a,b){return b.v-a.v;});
+  var max=rows.length?rows[0].v:1;
+  // cards
+  var topReason=Object.keys(reasonTot).sort(function(a,b){return reasonTot[b]-reasonTot[a];})[0]||'—';
+  var cards=document.getElementById('lr-cards');
   if(cards){
     function kc(l,v,sub,cls){return '<div class="kc"><div class="kl">'+l+'</div><div class="kv'+(cls?' '+cls:'')+'">'+v+'</div><div class="ks">'+(sub||'')+'</div></div>';}
+    var nStores=Object.keys(storeTot).filter(function(c){return storeTot[c]>0;}).length;
     cards.innerHTML=
-      kc('Loss of Sale', N(tTot), period+' · lost enquiries','red')+
-      kc('Product Availability', N(tPA), (tTot?Math.round(tPA/tTot*100):0)+'% of losses')+
-      kc('Pricing Concerns', N(tPR), (tTot?Math.round(tPR/tTot*100):0)+'% of losses')+
-      kc('Est. ₹ Impact', L(tEst), 'losses × ABV','red')+
-      kc('Stores with Loss', rows.filter(function(r){return r.total>0;}).length+'', 'of '+rows.length);
+      kc('Total Losses', N(grandTotal), period+' · KA & KL','red')+
+      kc('Top '+DIMLBL, rows.length?rows[0].k:'—', rows.length?(grandTotal?Math.round(rows[0].v/grandTotal*100)+'% · '+N(rows[0].v):''):'')+
+      kc(DIMLBL+'s', rows.length+'', 'distinct values')+
+      kc('Stores', nStores+'', 'with loss data')+
+      kc('Avg / Store', nStores?N(Math.round(grandTotal/nStores)):'—', 'losses per store');
   }
-  document.getElementById('los-title').textContent='Loss of Sale ('+vlabel+') · '+period+' · lost-enquiry log'+(!LOSS_DATA?'  ·  loading…':'');
-  var th=document.getElementById('los-thead');
+  document.getElementById('lr-title').textContent='Loss Reason Analysis — by '+DIMLBL+' · '+period+' · Karnataka & Kerala only'+(!LOSS_DATA?'  ·  loading…':'');
+  // table
+  var th=document.getElementById('lr-thead');
   if(th){
-    if(!grouped){
-      th.innerHTML='<tr><th onclick="srt(\'t-los\',0)">Store</th><th onclick="srt(\'t-los\',1)">RM</th><th onclick="srt(\'t-los\',2)">CM</th><th onclick="srt(\'t-los\',3)">Market</th><th class="r" onclick="srt(\'t-los\',4)">Losses</th><th class="r" onclick="srt(\'t-los\',5)">Product Avail</th><th class="r" onclick="srt(\'t-los\',6)">Pricing</th><th class="r" onclick="srt(\'t-los\',7)">Other</th><th class="r" onclick="srt(\'t-los\',8)">Est ₹</th></tr>';
+    if(LOSS_DIM==='store'){
+      th.innerHTML='<tr><th onclick="srt(\'t-lr\',0)">Store</th><th onclick="srt(\'t-lr\',1)">RM</th><th onclick="srt(\'t-lr\',2)">Market</th><th class="r" onclick="srt(\'t-lr\',3)">Losses</th><th class="r" onclick="srt(\'t-lr\',4)">% of total</th><th>Share</th></tr>';
     } else {
-      th.innerHTML='<tr><th onclick="srt(\'t-los\',0)">'+vlabel+'</th><th class="r" onclick="srt(\'t-los\',1)">Stores</th><th class="r" onclick="srt(\'t-los\',2)">Losses</th><th class="r" onclick="srt(\'t-los\',3)">Product Avail</th><th class="r" onclick="srt(\'t-los\',4)">Pricing</th><th class="r" onclick="srt(\'t-los\',5)">Other</th><th class="r" onclick="srt(\'t-los\',6)">Est ₹</th></tr>';
+      th.innerHTML='<tr><th onclick="srt(\'t-lr\',0)">'+DIMLBL+'</th><th class="r" onclick="srt(\'t-lr\',1)">Losses</th><th class="r" onclick="srt(\'t-lr\',2)">% of total</th><th>Share</th></tr>';
     }
   }
-  body.innerHTML=rows.map(function(r){
-    if(!grouped){
-      return '<tr style="cursor:pointer;" onclick="openDrill(\''+r.code+'\')">'+
-        '<td style="font-weight:700;color:#3b82f6;">'+r.label+'</td><td>'+r.rm+'</td><td>'+(r.cm||'')+'</td><td>'+r.market+'</td>'+
-        '<td class="r" style="font-weight:700;color:#dc2626;">'+N(r.total)+'</td><td class="r">'+N(r.pa)+'</td><td class="r">'+N(r.pr)+'</td><td class="r">'+N(r.other)+'</td>'+
-        '<td class="r" style="color:#dc2626;">'+L(r.est)+'</td></tr>';
+  function bar(v){var w=max?Math.round(v/max*100):0;return '<td style="min-width:120px;"><div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;"><div style="width:'+w+'%;height:100%;background:#dc2626;border-radius:4px;"></div></div></td>';}
+  body.innerHTML=(rows.length?rows.map(function(r){
+    var pct=grandTotal?Math.round(r.v/grandTotal*100):0;
+    if(LOSS_DIM==='store'){
+      return '<tr style="cursor:pointer;" onclick="openDrill(\''+r.k+'\')"><td style="font-weight:700;color:#3b82f6;">'+r.k+'</td><td>'+(r.rm||'')+'</td><td>'+(r.market||'')+'</td><td class="r" style="font-weight:700;color:#dc2626;">'+N(r.v)+'</td><td class="r">'+pct+'%</td>'+bar(r.v)+'</tr>';
     }
-    return '<tr><td style="font-weight:700;color:#3b82f6;">'+r.label+'</td><td class="r">'+r.n+'</td>'+
-      '<td class="r" style="font-weight:700;color:#dc2626;">'+N(r.total)+'</td><td class="r">'+N(r.pa)+'</td><td class="r">'+N(r.pr)+'</td><td class="r">'+N(r.other)+'</td>'+
-      '<td class="r" style="color:#dc2626;">'+L(r.est)+'</td></tr>';
-  }).join('')+
-  (grouped
-    ? '<tr class="ft"><td>Region</td><td class="r">'+rows.reduce(function(a,r){return a+r.n;},0)+'</td><td class="r" style="font-weight:700;color:#dc2626;">'+N(tTot)+'</td><td class="r">'+N(tPA)+'</td><td class="r">'+N(tPR)+'</td><td class="r">'+N(tOther)+'</td><td class="r" style="color:#dc2626;">'+L(tEst)+'</td></tr>'
-    : '<tr class="ft"><td colspan="4">Region ('+rows.length+')</td><td class="r" style="font-weight:700;color:#dc2626;">'+N(tTot)+'</td><td class="r">'+N(tPA)+'</td><td class="r">'+N(tPR)+'</td><td class="r">'+N(tOther)+'</td><td class="r" style="color:#dc2626;">'+L(tEst)+'</td></tr>');
+    return '<tr><td style="font-weight:600;">'+r.k+'</td><td class="r" style="font-weight:700;color:#dc2626;">'+N(r.v)+'</td><td class="r">'+pct+'%</td>'+bar(r.v)+'</tr>';
+  }).join('')
+    : '<tr><td colspan="'+(LOSS_DIM==='store'?6:4)+'" style="text-align:center;color:#9ca3af;padding:18px;">'+(LOSS_DATA?'No loss data for this selection (only APR/MAY/JUN available).':'Loading…')+'</td></tr>')+
+  (rows.length?'<tr class="ft"><td'+(LOSS_DIM==='store'?' colspan="3"':'')+'>Total</td><td class="r" style="font-weight:700;color:#dc2626;">'+N(grandTotal)+'</td><td class="r">100%</td><td></td></tr>':'');
 }
 
 // ═══════════════════════════════════════════
