@@ -270,6 +270,7 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <label>CM</label><select id="sel-cm" onchange="applyFilter()"><option value="">All</option></select>
   <label>City</label><select id="sel-city" onchange="applyFilter()"><option value="">All</option></select>
   <label>Market</label><select id="sel-market" onchange="applyFilter()"><option value="">All</option></select>
+  <label>Type</label><select id="sel-type" onchange="applyFilter()"><option value="">All</option><option value="SSSG">SSSG</option><option value="LY Open">LY Open</option><option value="TY Open">TY Open</option></select>
   <label>Quarter</label>
   <select id="sel-qtr" onchange="applyFilter()">
     <option value="">All</option>
@@ -415,6 +416,10 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
 
 <!-- BIFURCATION (RM › CM › Store target vs achievement) -->
 <div class="panel" id="panel-bif">
+  <div class="sh"><span class="sh-t">By Type — SSSG · LY Open · TY Open</span><div class="sh-l"></div></div>
+  <div class="tw"><table id="t-biftype"><thead><tr>
+    <th>Type</th><th class="r">Stores</th><th class="r">Target</th><th class="r">MTD Sales</th><th class="r">Ach%</th><th class="r">Projection</th><th class="r">Proj%</th>
+  </tr></thead><tbody id="b-biftype"></tbody></table></div>
   <div class="sh"><span class="sh-t" id="bif-title">Bifurcation</span><div class="sh-l"></div><button class="dl" onclick="dlT('t-bif','Bifurcation')">&#8595; CSV</button></div>
   <div class="tw"><table id="t-bif"><thead><tr>
     <th onclick="srt('t-bif',0)">RM &#8250; CM &#8250; Store</th><th class="r" onclick="srt('t-bif',1)">Stores</th><th class="r" onclick="srt('t-bif',2)">Target</th><th class="r" onclick="srt('t-bif',3)">MTD Sales</th><th class="r" onclick="srt('t-bif',4)">Ach%</th><th class="r" onclick="srt('t-bif',5)">Projection</th><th class="r" onclick="srt('t-bif',6)">Proj%</th>
@@ -892,6 +897,9 @@ function LA(n){if(!n&&n!==0)return'—';var a=Math.abs(n);return a>=1e3?'₹'+(n
 function convTgt(v){return(v>0&&v<=100)?(Math.round(v*10)/10)+'%':'—';}
 // Market = city prefix of the store name ("BLR - JAYNAGAR" -> BLR); fallback to code prefix
 function mkt(s){var n=((s&&s.name)||'').trim();var i=n.indexOf(' - ');if(i>0)return n.slice(0,i).trim().toUpperCase();var c=((s&&s.code)||'').toUpperCase();var m=c.match(/^[A-Z]+/);return m?m[0].slice(0,3):'';}
+// Store Type bifurcation from "Tar Vs Ach" — SSSG (comparable), LY Open (opened last FY), TY Open (new this FY)
+var STORE_TYPE={"BLR4JN":"LY Open","BLRFSB":"SSSG","BLRHSR":"SSSG","BLRKGP":"SSSG","BLRRMM":"SSSG","BLRRRN":"SSSG","KCHFRM":"SSSG","KCHLUL":"SSSG","KCHMGR":"SSSG","TRVLUL":"SSSG","BLRBSW":"SSSG","BLRDVG":"SSSG","BLRJAY":"SSSG","BLRNKM":"LY Open","BLRSMR":"TY Open","BLRVGA":"SSSG","MGLBMT":"SSSG","MGLCCM":"SSSG","MGLNFM":"LY Open","MYSDUR":"SSSG","MYSMOM":"SSSG","MYSNEX":"SSSG","UDPMMT":"SSSG","BLRARS":"SSSG","BLRSNK":"SSSG","BLRGRD":"SSSG","BLRIND":"SSSG","BLRKRP":"LY Open","BLRMAL":"SSSG","BLRMNT":"SSSG","BLRORN":"SSSG","BLRWPX":"SSSG","BLRWMR":"TY Open","HSPVCR":"LY Open","BGMABR":"SSSG","BGMMPR":"TY Open","BLRBEL":"SSSG","BLRCST":"SSSG","BLRHNR":"SSSG","BLRKHL":"SSSG","BLRMOA":"SSSG","BLRRMZ":"SSSG","BLRSKR":"SSSG","HBLGKR":"LY Open","HBLKPR":"SSSG","BLRBRO":"TY Open"};
+function styp(s){return STORE_TYPE[((s&&s.code)||'').toUpperCase()]||'—';}
 function pc(p){return p>=100?'gv':p>=85?'av':'rv';}
 
 // ═══════════════════════════════════════════
@@ -1058,6 +1066,7 @@ function fill(id,arr){var el=document.getElementById(id),v=el.value;el.innerHTML
 function applyFilter(){
   var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value;
   var mkEl=document.getElementById('sel-market');var mk=mkEl?mkEl.value:'';
+  var tyEl=document.getElementById('sel-type');var ty=tyEl?tyEl.value:'';
   var qtrEl=document.getElementById('sel-qtr');
   var qtr=qtrEl?qtrEl.value:'';
   var qtrMonths={Q1:['APR','MAY','JUN'],Q2:['JUL','AUG','SEP'],Q3:['OCT','NOV','DEC'],Q4:['JAN','FEB','MAR']};
@@ -1065,14 +1074,14 @@ function applyFilter(){
   filtered=raw.filter(function(s){
     var name=(s.name||s.code||'').toUpperCase();
     if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;
-    return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk);
+    return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk)&&(!ty||styp(s)===ty);
   });
   document.getElementById('fbadge').textContent=filtered.length+' stores · '+labels.length+'d · '+activeSheet;
   renderAll();
   // Sync category tab if loaded
   if(catData) renderCat();
 }
-function resetFilter(){['sel-rm','sel-cm','sel-city','sel-market','sel-qtr'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});applyFilter();}
+function resetFilter(){['sel-rm','sel-cm','sel-city','sel-market','sel-type','sel-qtr'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});applyFilter();}
 
 // ═══════════════════════════════════════════
 // RENDER ALL
@@ -1093,7 +1102,8 @@ function summaryEntries(){
   if(selMonths.length<=1) return filtered.map(function(s){return{s:s,m:activeSheet};});
   var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value;
   var mkEl=document.getElementById('sel-market');var mk=mkEl?mkEl.value:'';
-  var pred=function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk);};
+  var tyEl=document.getElementById('sel-type');var ty=tyEl?tyEl.value:'';
+  var pred=function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk)&&(!ty||styp(s)===ty);};
   var out=[];
   selMonths.forEach(function(m){
     var arr=(m===activeSheet?raw:monthCache[m])||[];
@@ -1575,7 +1585,7 @@ function storeL2L(s,N){
 }
 // ── Multi-month combine: when >1 month is ticked, Overview & L2L sum across them ──
 function l2lWindow(stores){var maxLen=0;stores.forEach(function(s){if(s.daySales)maxLen=Math.max(maxLen,s.daySales.length);});var N=0;for(var i=0;i<maxLen;i++){var sm=0;stores.forEach(function(s){sm+=(s.daySales&&s.daySales[i])||0;});if(sm>0)N=i+1;}return N;}
-function curPred(){var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value,mkEl=document.getElementById('sel-market'),mkv=mkEl?mkEl.value:'';return function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mkv||mkt(s)===mkv);};}
+function curPred(){var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value,mkEl=document.getElementById('sel-market'),mkv=mkEl?mkEl.value:'',tyEl=document.getElementById('sel-type'),tyv=tyEl?tyEl.value:'';return function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mkv||mkt(s)===mkv)&&(!tyv||styp(s)===tyv);};}
 // Combined per-store records across the selected months (totals summed, rates recomputed,
 // rate-targets averaged) plus pre-summed like-for-like (_ty/_ly) per month window.
 function aggStores(){
@@ -1771,6 +1781,18 @@ function renderLOS(){
 function renderBif(){
   var body=document.getElementById('b-bif');if(!body)return;
   var data=ovStores();
+  // ── By-Type summary (SSSG / LY Open / TY Open) ──
+  var tbody=document.getElementById('b-biftype');
+  if(tbody){
+    var T={},ORDER=['SSSG','LY Open','TY Open'];
+    data.forEach(function(s){var k=styp(s);if(!T[k])T[k]={t:0,s:0,p:0,n:0};var g=T[k];g.t+=s.target;g.s+=s.mtdSales;g.p+=s.projectedTotal||0;g.n++;});
+    var keys=Object.keys(T).sort(function(a,b){var ia=ORDER.indexOf(a),ib=ORDER.indexOf(b);return (ia<0?9:ia)-(ib<0?9:ib);});
+    var TT=0,TS=0,TP=0,TN=0;
+    tbody.innerHTML=keys.map(function(k){var g=T[k];TT+=g.t;TS+=g.s;TP+=g.p;TN+=g.n;
+      var a=g.t?Math.round(g.s/g.t*100):0,pj=g.t?Math.round(g.p/g.t*100):0;
+      return '<tr><td style="font-weight:700;color:#3b82f6;">'+k+'</td><td class="r">'+g.n+'</td><td class="r">'+L(g.t)+'</td><td class="r" style="font-weight:600;">'+L(g.s)+'</td><td class="r '+pc(a)+'">'+a+'%</td><td class="r">'+L(g.p)+'</td><td class="r '+pc(pj)+'">'+pj+'%</td></tr>';
+    }).join('')+'<tr class="ft"><td>Total</td><td class="r">'+TN+'</td><td class="r">'+L(TT)+'</td><td class="r">'+L(TS)+'</td><td class="r '+pc(TT?Math.round(TS/TT*100):0)+'">'+(TT?Math.round(TS/TT*100):0)+'%</td><td class="r">'+L(TP)+'</td><td class="r '+pc(TT?Math.round(TP/TT*100):0)+'">'+(TT?Math.round(TP/TT*100):0)+'%</td></tr>';
+  }
   var R={};
   data.forEach(function(s){
     var rm=s.rm||'?',cm=s.cm||'?';
@@ -1796,7 +1818,7 @@ function renderBif(){
         '<td class="r">'+L(c.p)+'</td>'+pcell(c.t,c.p)+'</tr>';
       sub+=c.stores.sort(function(a,b){return b.mtdSales-a.mtdSales;}).map(function(s){
         return '<tr style="cursor:pointer;" onclick="openDrill(\''+s.code+'\')">'+
-          '<td style="padding-left:48px;font-weight:600;color:#3b82f6;">'+s.code+'</td><td></td>'+
+          '<td style="padding-left:48px;font-weight:600;color:#3b82f6;">'+s.code+' <span style="font-size:9px;color:#9ca3af;font-weight:400;">'+styp(s)+'</span></td><td></td>'+
           '<td class="r">'+L(s.target)+'</td><td class="r">'+L(s.mtdSales)+'</td>'+pcell(s.target,s.mtdSales)+
           '<td class="r">'+L(s.projectedTotal||0)+'</td>'+pcell(s.target,s.projectedTotal||0)+'</tr>';
       }).join('');
