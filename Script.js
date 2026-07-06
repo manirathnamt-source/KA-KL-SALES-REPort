@@ -114,7 +114,21 @@ function getMonthly(monthName) {
     }
   }
 
-  // Method 2: if none found, use fixed layout
+  // Method 1b: some months (e.g. JUL) have DATE values in the day header instead of
+  // "Jul-1" text, so Method 1 finds nothing. Detect the per-day SALES columns from the
+  // SUB-HEADER row instead — every day block starts with a "SALES (₹)" cell.
+  if (dayLabels.length === 0) {
+    var subHdr = allData[headerRowIdx + 1] || [];
+    for (var cs = 0; cs < subHdr.length; cs++) {
+      var sv = String(subHdr[cs] || '').replace(/\s+/g, ' ').toUpperCase();
+      if (sv.indexOf('SALES') !== -1 && sv.indexOf('(') !== -1) dayStartCols.push(cs);
+    }
+    dayStartCols = dayStartCols.slice(0, totalDays);   // drop any trailing total column
+    for (var di = 0; di < dayStartCols.length; di++) dayLabels.push(mAbbr + '-' + (di + 1));
+    if (dayLabels.length) Logger.log('Day cols via sub-header: ' + dayLabels.length + ' starting at col ' + (dayStartCols[0]+1));
+  }
+
+  // Method 2: if still none, use fixed layout
   // Known layout: Target cols at idx 4-8 (cols 5-9), Day1 SALES at idx 9 (col 10)
   if (dayLabels.length === 0) {
     Logger.log('No day labels in header row ' + headerRowIdx + ' — using fixed layout');
