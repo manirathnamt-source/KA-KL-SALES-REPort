@@ -257,6 +257,9 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
 .mm>summary::after{content:'\25BC';position:absolute;right:7px;top:50%;transform:translateY(-50%);font-size:8px;opacity:.6;}
 .mm[open]>summary{border-color:#3b82f6;}
 .mm-pop{position:absolute;z-index:50;top:calc(100% + 4px);left:0;background:var(--card,#fff);border:1px solid var(--border,#d1d5db);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:6px;min-width:170px;max-height:280px;overflow:auto;}
+.mm-pop-store{min-width:270px;max-width:320px;max-height:340px;}
+.mm-search{width:100%;box-sizing:border-box;font-size:12px;padding:4px 7px;margin-bottom:5px;border:1px solid var(--border,#d1d5db);border-radius:5px;background:var(--card,#fff);color:inherit;}
+.mm-list{max-height:220px;overflow:auto;}
 .mm-it{display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:5px;font-size:12px;cursor:pointer;white-space:nowrap;}
 .mm-it:hover{background:rgba(59,130,246,.10);}
 .mm-it input{margin:0;cursor:pointer;}
@@ -274,7 +277,11 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   </details>
   <label>RM</label><select id="sel-rm" onchange="applyFilter()"><option value="">All</option></select>
   <label>CM</label><select id="sel-cm" onchange="applyFilter()"><option value="">All</option></select>
-  <label>Store</label><select id="sel-store" onchange="applyFilter()" style="max-width:200px;"><option value="">All</option></select>
+  <label>Store</label>
+  <details class="mm" id="st-wrap">
+    <summary id="st-sum">All</summary>
+    <div class="mm-pop mm-pop-store" id="st-pop"></div>
+  </details>
   <label>City</label><select id="sel-city" onchange="applyFilter()"><option value="">All</option></select>
   <label>Market</label><select id="sel-market" onchange="applyFilter()"><option value="">All</option></select>
   <label>Type</label><select id="sel-type" onchange="applyFilter()"><option value="">All</option><option value="SSSG">SSSG</option><option value="LY Open">LY Open</option><option value="TY Open">TY Open</option></select>
@@ -876,6 +883,8 @@ var filtered=[],liveTimer=null,sortDirs={},activeWK='sales',activeCV='cat';
 var catData=null;
 var ALL_MONTHS=['APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC','JAN','FEB','MAR'];
 var selMonths=['APR'];   // checked months; selMonths[0] is the primary month driving single-month tabs
+var selStores=[];         // checked store codes; empty = All stores
+var storeOpts=[];         // [{code,name}] for the Store picker, built in buildFilters
 var monthCache={};        // month -> stores array, for multi-month Summary combine
 var prevFetching={};      // guards background fetch of previous month (Weekly continuous compare)
 var L2L_DATA=null;        // last-FY (2025-26) daily sales per month per store code, from l2l_map.json
@@ -1091,6 +1100,47 @@ function updateMonthLabel(){
   el.textContent=selMonths.length<=1?(selMonths[0]||'Select'):(selMonths.length+' months');
   el.title=selMonths.join(' + ');
 }
+// ── Store multi-select ─────────────────────
+function hesc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+// Build the store checkbox list; `q` filters the visible rows by name/code
+function renderStorePicker(q){
+  var pop=document.getElementById('st-pop');if(!pop)return;
+  var term=(q==null?(window._stQ||''):q);window._stQ=term;
+  var t=term.trim().toUpperCase();
+  var shown=storeOpts.filter(function(o){return !t||String(o.name).toUpperCase().indexOf(t)>=0||String(o.code).toUpperCase().indexOf(t)>=0;});
+  pop.innerHTML='<input class="mm-search" id="st-q" type="text" placeholder="Search store…" value="'+hesc(term)+'" oninput="onStoreSearch(this.value)" onclick="event.stopPropagation()">'+
+  '<div class="mm-list">'+(shown.length?shown.map(function(o){
+    var ck=selStores.indexOf(o.code)>=0?' checked':'';
+    return '<label class="mm-it"><input type="checkbox" value="'+hesc(o.code)+'" onchange="onStoreToggle(this)"'+ck+'>'+hesc(o.name)+'</label>';
+  }).join(''):'<div class="mm-it nd">No match</div>')+'</div>'+
+  '<div class="mm-foot"><button type="button" onclick="selectAllStores(true)">All shown</button><button type="button" onclick="selectAllStores(false)">Clear</button></div>';
+  updateStoreLabel();
+}
+function onStoreSearch(v){
+  renderStorePicker(v);
+  var q=document.getElementById('st-q');if(q){q.focus();q.setSelectionRange(v.length,v.length);}
+}
+function onStoreToggle(cb){
+  var c=cb.value;
+  if(cb.checked){if(selStores.indexOf(c)<0)selStores.push(c);}
+  else selStores=selStores.filter(function(x){return x!==c;});
+  updateStoreLabel();applyFilter();
+}
+// "All shown" ticks everything currently matching the search; "Clear" resets to All
+function selectAllStores(on){
+  if(on){
+    var t=(window._stQ||'').trim().toUpperCase();
+    storeOpts.filter(function(o){return !t||String(o.name).toUpperCase().indexOf(t)>=0||String(o.code).toUpperCase().indexOf(t)>=0;})
+      .forEach(function(o){if(selStores.indexOf(o.code)<0)selStores.push(o.code);});
+  } else selStores=[];
+  renderStorePicker();applyFilter();
+}
+function updateStoreLabel(){
+  var el=document.getElementById('st-sum');if(!el)return;
+  var names=selStores.map(function(c){var o=storeOpts.filter(function(x){return x.code===c;})[0];return o?o.name:c;});
+  el.textContent=!selStores.length?'All':(selStores.length===1?names[0]:selStores.length+' stores');
+  el.title=names.join(', ')||'All stores';
+}
 function startLive(){
   if(liveTimer){clearInterval(liveTimer);liveTimer=null;}
   var sec=parseInt(document.getElementById('sel-rf').value)||0;
@@ -1108,17 +1158,24 @@ function buildFilters(sheets){
   fill('sel-cm',[...new Set(raw.map(function(s){return s.cm;}))].filter(Boolean).sort());
   fill('sel-city',[...new Set(raw.map(function(s){return s.city;}))].filter(Boolean).sort());
   fill('sel-market',[...new Set(raw.map(mkt))].filter(Boolean).sort());
-  var stEl=document.getElementById('sel-store');
-  if(stEl){var v=stEl.value;var opts=raw.filter(function(s){var n=(s.name||s.code||'').toUpperCase();return n.indexOf('WAREHOUSE')===-1&&n.indexOf('GODOWN')===-1&&s.code;}).map(function(s){return {code:s.code,name:s.name||s.code};}).sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
-    stEl.innerHTML='<option value="">All</option>'+opts.map(function(o){return '<option value="'+o.code+'"'+(o.code===v?' selected':'')+'>'+o.name+'</option>';}).join('');}
+  var seen={};
+  storeOpts=raw.filter(function(s){var n=(s.name||s.code||'').toUpperCase();return n.indexOf('WAREHOUSE')===-1&&n.indexOf('GODOWN')===-1&&s.code;})
+    .filter(function(s){if(seen[s.code])return false;seen[s.code]=1;return true;})
+    .map(function(s){return {code:s.code,name:s.name||s.code};})
+    .sort(function(a,b){return String(a.name).localeCompare(String(b.name));});
+  // drop any checked codes that no longer exist in this month's data
+  var live={};storeOpts.forEach(function(o){live[o.code]=1;});
+  selStores=selStores.filter(function(c){return live[c];});
+  renderStorePicker();
   renderMonthPicker(sheets);
 }
+// Store filter: no selection = all stores
+function storeOK(s){return !selStores.length||selStores.indexOf(s.code)>=0;}
 function fill(id,arr){var el=document.getElementById(id),v=el.value;el.innerHTML='<option value="">All</option>'+arr.map(function(a){return'<option value="'+a+'"'+(a===v?' selected':'')+'>'+a+'</option>';}).join('');}
 function applyFilter(){
   var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value;
   var mkEl=document.getElementById('sel-market');var mk=mkEl?mkEl.value:'';
   var tyEl=document.getElementById('sel-type');var ty=tyEl?tyEl.value:'';
-  var stEl0=document.getElementById('sel-store');var st=stEl0?stEl0.value:'';
   var dfEl=document.getElementById('dt-from'),dtEl=document.getElementById('dt-to');
   dateFrom=dfEl&&dfEl.value?dfEl.value:null;dateTo=dtEl&&dtEl.value?dtEl.value:null;
   var qtrEl=document.getElementById('sel-qtr');
@@ -1128,14 +1185,14 @@ function applyFilter(){
   filtered=applyDateRange(raw,activeSheet).filter(function(s){
     var name=(s.name||s.code||'').toUpperCase();
     if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;
-    return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk)&&(!ty||styp(s)===ty)&&(!st||s.code===st);
+    return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk)&&(!ty||styp(s)===ty)&&storeOK(s);
   });
   document.getElementById('fbadge').textContent=filtered.length+' stores · '+labels.length+'d · '+activeSheet+(rangeActive()?' · '+rangeLabel():'');
   renderAll();
   // Sync category tab if loaded
   if(catData) renderCat();
 }
-function resetFilter(){['sel-rm','sel-cm','sel-store','sel-city','sel-market','sel-type','sel-qtr','dt-from','dt-to'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});dateFrom=null;dateTo=null;applyFilter();}
+function resetFilter(){['sel-rm','sel-cm','sel-city','sel-market','sel-type','sel-qtr','dt-from','dt-to'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});selStores=[];renderStorePicker('');dateFrom=null;dateTo=null;applyFilter();}
 
 // ═══════════════════════════════════════════
 // RENDER ALL
@@ -1157,8 +1214,7 @@ function summaryEntries(){
   var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value;
   var mkEl=document.getElementById('sel-market');var mk=mkEl?mkEl.value:'';
   var tyEl=document.getElementById('sel-type');var ty=tyEl?tyEl.value:'';
-  var stEl=document.getElementById('sel-store');var st=stEl?stEl.value:'';
-  var pred=function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk)&&(!ty||styp(s)===ty)&&(!st||s.code===st);};
+  var pred=function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mk||mkt(s)===mk)&&(!ty||styp(s)===ty)&&storeOK(s);};
   var out=[];
   selMonths.forEach(function(m){
     var arr=(m===activeSheet?raw:monthCache[m])||[];
@@ -1724,7 +1780,7 @@ function storeL2L(s,N){
 }
 // ── Multi-month combine: when >1 month is ticked, Overview & L2L sum across them ──
 function l2lWindow(stores){var maxLen=0;stores.forEach(function(s){if(s.daySales)maxLen=Math.max(maxLen,s.daySales.length);});var N=0;for(var i=0;i<maxLen;i++){var sm=0;stores.forEach(function(s){sm+=(s.daySales&&s.daySales[i])||0;});if(sm>0)N=i+1;}return N;}
-function curPred(){var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value,mkEl=document.getElementById('sel-market'),mkv=mkEl?mkEl.value:'',tyEl=document.getElementById('sel-type'),tyv=tyEl?tyEl.value:'',stEl=document.getElementById('sel-store'),stv=stEl?stEl.value:'';return function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mkv||mkt(s)===mkv)&&(!tyv||styp(s)===tyv)&&(!stv||s.code===stv);};}
+function curPred(){var rm=document.getElementById('sel-rm').value,cm=document.getElementById('sel-cm').value,cy=document.getElementById('sel-city').value,mkEl=document.getElementById('sel-market'),mkv=mkEl?mkEl.value:'',tyEl=document.getElementById('sel-type'),tyv=tyEl?tyEl.value:'';return function(s){var name=(s.name||s.code||'').toUpperCase();if(name.indexOf('WAREHOUSE')!==-1||name.indexOf('GODOWN')!==-1)return false;return(!rm||s.rm===rm)&&(!cm||s.cm===cm)&&(!cy||s.city===cy)&&(!mkv||mkt(s)===mkv)&&(!tyv||styp(s)===tyv)&&storeOK(s);};}
 // Combined per-store records across the selected months (totals summed, rates recomputed,
 // rate-targets averaged) plus pre-summed like-for-like (_ty/_ly) per month window.
 function aggStores(){
