@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>KA &amp; KL Aug FY27 Target Review</title>
 <style>
 :root{
@@ -132,7 +133,7 @@ tr:last-child td{border-bottom:none}
 <div class="controls">
   <span id="regionchips"></span>
   <div class="msel" id="msel">
-    <button class="msel-btn" id="mselbtn" aria-haspopup="listbox" aria-expanded="false">Select stores â–¾</button>
+    <button class="msel-btn" id="mselbtn" aria-haspopup="listbox" aria-expanded="false">Select stores ▾</button>
     <div class="msel-panel" id="mselpanel">
       <div class="msel-tools">
         <input type="search" id="mselq" placeholder="Type to filter&hellip;" aria-label="Filter store list">
@@ -181,10 +182,10 @@ function cls(ly,t){
   return "hard";
 }
 const CLSLBL={below:"Below LY",ok:"Achievable",stretch:"Stretch",hard:"Difficult",new:"New store"};
-function inr(n){return "â‚¹"+Math.round(n).toLocaleString("en-IN");}
+function inr(n){return "₹"+Math.round(n).toLocaleString("en-IN");}
 function lakh(n){
-  if(Math.abs(n)>=1e7) return "â‚¹"+(n/1e7).toFixed(2)+" Cr";
-  if(Math.abs(n)>=1e5) return "â‚¹"+(n/1e5).toFixed(1)+" L";
+  if(Math.abs(n)>=1e7) return "₹"+(n/1e7).toFixed(2)+" Cr";
+  if(Math.abs(n)>=1e5) return "₹"+(n/1e5).toFixed(1)+" L";
   return inr(n);
 }
 function pct(g){return (g>0?"+":"")+(g*100).toFixed(g*100>=100?0:1)+"%";}
@@ -211,7 +212,7 @@ for(const r of rows){
 document.getElementById("catgrid").innerHTML=Object.entries(catAgg)
  .filter(([c,v])=>v.ly>0)
  .sort((a,b)=>(b[1].t/b[1].ly)-(a[1].t/a[1].ly))
- .map(([c,v])=>`<div class="catcard"><div class="c">${c}</div><div class="g">${pct(v.t/v.ly-1)}</div><div class="d">${lakh(v.ly)} â†’ ${lakh(v.t)}</div></div>`).join("");
+ .map(([c,v])=>`<div class="catcard"><div class="c">${c}</div><div class="g">${pct(v.t/v.ly-1)}</div><div class="d">${lakh(v.ly)} → ${lakh(v.t)}</div></div>`).join("");
 
 // Controls state
 const REGIONS=["All","Bangalore","Rest of Karnataka","Kerala","New stores"];
@@ -238,7 +239,7 @@ function buildList(){
     .map(s=>`<label><input type="checkbox" data-code="${s.code}"${sel.has(s.code)?" checked":""}> ${s.name||s.code}<span class="cd">${s.code}</span></label>`).join("");
 }
 function syncBtn(){
-  mselbtn.textContent=sel.size?`${sel.size} store${sel.size>1?"s":""} selected â–¾`:"Select stores â–¾";
+  mselbtn.textContent=sel.size?`${sel.size} store${sel.size>1?"s":""} selected ▾`:"Select stores ▾";
   mselbtn.classList.toggle("has",sel.size>0);
 }
 mselbtn.addEventListener("click",()=>{
@@ -267,13 +268,13 @@ function storeRows(s){
     const barc=c==="hard"?"var(--risk)":c==="stretch"?"var(--warn)":"var(--good)";
     return `<tr>
       <td>${r.cat}</td>
-      <td>${r.lyGmv?inr(r.lyGmv):'<span class="muted">â€”</span>'}</td>
+      <td>${r.lyGmv?inr(r.lyGmv):'<span class="muted">—</span>'}</td>
       <td>${inr(r.tRev)}</td>
       <td>${g===null?'<span class="badge b-new">new</span>':`<span class="gbar"><i style="width:${barw}%;background:${barc}"></i></span>${pct(g)}`}</td>
-      <td>${r.lyQty||"â€”"}</td>
-      <td>${r.tUnits||"â€”"}</td>
-      <td>${r.stock||"â€”"}</td>
-      <td>${str===null?'<span class="muted">â€”</span>':(str*100).toFixed(0)+"%"+stockBadge}</td>
+      <td>${r.lyQty||"—"}</td>
+      <td>${r.tUnits||"—"}</td>
+      <td>${r.stock||"—"}</td>
+      <td>${str===null?'<span class="muted">—</span>':(str*100).toFixed(0)+"%"+stockBadge}</td>
       <td><span class="badge b-${c}">${CLSLBL[c]}</span></td>
     </tr>`;}).join("");
 }
@@ -302,9 +303,9 @@ function render(){
     const withBase=list.filter(s=>s.ly>0);
     const bly=withBase.reduce((a,s)=>a+s.ly,0), bt=withBase.reduce((a,s)=>a+s.t,0);
     sumEl.className="selsum show";
-    sumEl.innerHTML=`<b>${list.length} selected:</b> LY Aug <b>${lakh(sly)}</b> â†’ Target <b>${lakh(st)}</b>`+
-      (bly>0?` Â· growth needed on comparable stores <b>${pct(bt/bly-1)}</b>`:"")+
-      (list.length>withBase.length?` Â· includes ${list.length-withBase.length} new store(s)`:"");
+    sumEl.innerHTML=`<b>${list.length} selected:</b> LY Aug <b>${lakh(sly)}</b> → Target <b>${lakh(st)}</b>`+
+      (bly>0?` · growth needed on comparable stores <b>${pct(bt/bly-1)}</b>`:"")+
+      (list.length>withBase.length?` · includes ${list.length-withBase.length} new store(s)`:"");
   } else { sumEl.className="selsum"; sumEl.innerHTML=""; }
 
   document.getElementById("stores").innerHTML=list.map(s=>{
@@ -312,9 +313,9 @@ function render(){
     const g=s.ly>0?s.t/s.ly-1:null;
     return `<div class="store${allOpen||sel.size>0?" open":""}">
       <div class="store-head" tabindex="0" role="button" aria-expanded="${allOpen||sel.size>0}">
-        <div style="flex:1 1 240px"><div class="code">${s.code} Â· ${s.region||""}</div><div class="nm">${s.name||s.code}</div></div>
-        <div class="nums">LY <b>${lakh(s.ly)}</b> â†’ Target <b>${lakh(s.t)}</b></div>
-        <span class="badge b-${c}">${g===null?"New store":pct(g)+" Â· "+CLSLBL[c]}</span>
+        <div style="flex:1 1 240px"><div class="code">${s.code} · ${s.region||""}</div><div class="nm">${s.name||s.code}</div></div>
+        <div class="nums">LY <b>${lakh(s.ly)}</b> → Target <b>${lakh(s.t)}</b></div>
+        <span class="badge b-${c}">${g===null?"New store":pct(g)+" · "+CLSLBL[c]}</span>
       </div>
       <div class="store-body"><div class="tblwrap"><table>
         <thead><tr><th>Category</th><th>LY Aug GMV</th><th>Target Rev</th><th>Growth needed</th><th>LY Qty</th><th>Tgt Units</th><th>Stock</th><th>Req. sell-through</th><th>Verdict</th></tr></thead>
