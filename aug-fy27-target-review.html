@@ -1,0 +1,343 @@
+<title>KA &amp; KL Aug FY27 Target Review</title>
+<style>
+:root{
+  --bg:#FAF7F2; --panel:#FFFFFF; --ink:#2B2118; --muted:#8A7A66; --line:#E8E0D2;
+  --accent:#8C6A1D; --accent-soft:#F3EBDA;
+  --good:#1E7A46; --good-bg:#E4F2E9;
+  --warn:#A86D08; --warn-bg:#FBF0D9;
+  --risk:#B3383D; --risk-bg:#F9E4E4;
+  --new:#3D6EA5; --new-bg:#E3ECF6;
+  --below:#1E7A46; --below-bg:#E4F2E9;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#17130E; --panel:#201A13; --ink:#EDE4D5; --muted:#A08F79; --line:#383021;
+    --accent:#D2A94F; --accent-soft:#2C2416;
+    --good:#5CBE8A; --good-bg:#1C2E23;
+    --warn:#DDA83F; --warn-bg:#312817;
+    --risk:#E0716F; --risk-bg:#331B1B;
+    --new:#82ABD9; --new-bg:#1B2634;
+    --below:#5CBE8A; --below-bg:#1C2E23;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#17130E; --panel:#201A13; --ink:#EDE4D5; --muted:#A08F79; --line:#383021;
+  --accent:#D2A94F; --accent-soft:#2C2416;
+  --good:#5CBE8A; --good-bg:#1C2E23;
+  --warn:#DDA83F; --warn-bg:#312817;
+  --risk:#E0716F; --risk-bg:#331B1B;
+  --new:#82ABD9; --new-bg:#1B2634;
+  --below:#5CBE8A; --below-bg:#1C2E23;
+}
+:root[data-theme="light"]{
+  --bg:#FAF7F2; --panel:#FFFFFF; --ink:#2B2118; --muted:#8A7A66; --line:#E8E0D2;
+  --accent:#8C6A1D; --accent-soft:#F3EBDA;
+  --good:#1E7A46; --good-bg:#E4F2E9;
+  --warn:#A86D08; --warn-bg:#FBF0D9;
+  --risk:#B3383D; --risk-bg:#F9E4E4;
+  --new:#3D6EA5; --new-bg:#E3ECF6;
+  --below:#1E7A46; --below-bg:#E4F2E9;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;margin:0;line-height:1.45}
+.wrap{max-width:1140px;margin:0 auto;padding:28px 20px 80px}
+header.page h1{font-family:Georgia,"Times New Roman",serif;font-weight:600;font-size:clamp(24px,3.4vw,34px);margin:0 0 6px;text-wrap:balance}
+header.page .sub{color:var(--muted);font-size:14px;margin:0 0 4px}
+.eyebrow{letter-spacing:.14em;text-transform:uppercase;font-size:11px;color:var(--accent);font-weight:600;margin-bottom:8px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:24px 0 8px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.kpi .lbl{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.kpi .val{font-size:24px;font-weight:650;font-variant-numeric:tabular-nums;margin-top:4px}
+.kpi .note{font-size:12px;color:var(--muted);margin-top:2px}
+h2{font-family:Georgia,serif;font-weight:600;font-size:19px;margin:34px 0 12px}
+.catgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.catcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 13px}
+.catcard .c{font-size:12.5px;font-weight:600}
+.catcard .g{font-size:19px;font-weight:650;font-variant-numeric:tabular-nums;margin-top:2px}
+.catcard .d{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:16px 0 14px;position:sticky;top:0;background:var(--bg);padding:10px 0;z-index:5;border-bottom:1px solid var(--line)}
+.chip{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:5px 13px;font-size:13px;cursor:pointer}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+:root[data-theme="dark"] .chip.on{color:#17130E}
+select,input[type=search]{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 10px;font-size:13px;font-family:inherit}
+input[type=search]{min-width:160px}
+button.linkish{border:none;background:none;color:var(--accent);font-size:13px;cursor:pointer;text-decoration:underline;padding:4px}
+.msel{position:relative;display:inline-block}
+.msel-btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit}
+.msel-btn.has{border-color:var(--accent);color:var(--accent);font-weight:600}
+.msel-panel{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:20;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);min-width:300px;max-height:350px;overflow-y:auto;padding:8px}
+.msel.open .msel-panel{display:block}
+.msel-panel label{display:flex;gap:8px;align-items:center;padding:5px 8px;border-radius:6px;font-size:13px;cursor:pointer}
+.msel-panel label:hover{background:var(--accent-soft)}
+.msel-panel label .cd{color:var(--muted);font-size:11px;margin-left:auto}
+.msel-tools{display:flex;gap:10px;align-items:center;padding:2px 8px 8px;border-bottom:1px solid var(--line);margin-bottom:6px;position:sticky;top:0;background:var(--panel)}
+.msel-tools input{flex:1;min-width:0}
+.selsum{background:var(--accent-soft);border:1px solid var(--line);border-radius:10px;padding:10px 16px;font-size:13.5px;margin-bottom:12px;font-variant-numeric:tabular-nums;display:none}
+.selsum.show{display:block}
+.store{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:12px;overflow:hidden}
+.store-head{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:13px 16px;cursor:pointer}
+.store-head:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.store-head .code{font-size:11.5px;color:var(--muted);letter-spacing:.06em}
+.store-head .nm{font-weight:650;font-size:15.5px;flex:1 1 240px}
+.store-head .nums{font-variant-numeric:tabular-nums;font-size:13.5px;color:var(--muted)}
+.store-head .nums b{color:var(--ink);font-weight:650}
+.badge{display:inline-block;border-radius:999px;padding:2.5px 10px;font-size:11.5px;font-weight:650;white-space:nowrap}
+.b-hard{background:var(--risk-bg);color:var(--risk)}
+.b-stretch{background:var(--warn-bg);color:var(--warn)}
+.b-ok{background:var(--good-bg);color:var(--good)}
+.b-below{background:var(--below-bg);color:var(--below)}
+.b-new{background:var(--new-bg);color:var(--new)}
+.b-stock{background:var(--risk-bg);color:var(--risk);font-weight:600}
+.b-tight{background:var(--warn-bg);color:var(--warn);font-weight:600}
+.store-body{border-top:1px solid var(--line);display:none}
+.store.open .store-body{display:block}
+.tblwrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:760px}
+th{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);text-align:right;padding:9px 12px;border-bottom:1px solid var(--line);font-weight:600}
+th:first-child{text-align:left}
+td{padding:8px 12px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td:first-child{text-align:left;font-weight:600;white-space:normal}
+tr:last-child td{border-bottom:none}
+.gbar{display:inline-block;width:64px;height:6px;border-radius:3px;background:var(--line);vertical-align:middle;margin-right:8px;overflow:hidden}
+.gbar i{display:block;height:100%;border-radius:3px}
+.muted{color:var(--muted)}
+.notes{background:var(--accent-soft);border:1px solid var(--line);border-radius:10px;padding:14px 18px;font-size:13.5px;margin-top:26px}
+.notes ul{margin:8px 0 0;padding-left:18px}
+.notes li{margin-bottom:5px}
+.legend{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--muted);margin:10px 0 18px;align-items:center}
+@media (max-width:640px){ .store-head .nums{width:100%} }
+</style>
+
+<div class="wrap">
+<header class="page">
+  <div class="eyebrow">Kushals &middot; KA &amp; KL &middot; Target Review</div>
+  <h1>August FY27 targets vs August 2025 actuals</h1>
+  <p class="sub">Category-level revenue targets for Aug 2026 compared with Net GMV achieved in Aug 2025, for every Karnataka &amp; Kerala store. Sell-through pressure computed from units in stock.</p>
+</header>
+
+<div class="kpis" id="kpis"></div>
+
+<h2>Category view (existing stores)</h2>
+<div class="catgrid" id="catgrid"></div>
+
+<h2>Store by store</h2>
+<div class="legend">
+  <span class="badge b-below">Below LY</span> target under last year
+  <span class="badge b-ok">Achievable</span> &le;15% growth
+  <span class="badge b-stretch">Stretch</span> 15&ndash;35%
+  <span class="badge b-hard">Difficult</span> &gt;35%
+  <span class="badge b-new">New store</span> no LY base
+  <span class="badge b-stock">Stock risk</span> target &ge;80% of stock
+</div>
+<div class="controls">
+  <span id="regionchips"></span>
+  <div class="msel" id="msel">
+    <button class="msel-btn" id="mselbtn" aria-haspopup="listbox" aria-expanded="false">Select stores â–¾</button>
+    <div class="msel-panel" id="mselpanel">
+      <div class="msel-tools">
+        <input type="search" id="mselq" placeholder="Type to filter&hellip;" aria-label="Filter store list">
+        <button class="linkish" id="mselclear">Clear</button>
+      </div>
+      <div id="msellist"></div>
+    </div>
+  </div>
+  <select id="sortsel" aria-label="Sort stores">
+    <option value="gdesc">Hardest first (growth needed)</option>
+    <option value="gasc">Easiest first</option>
+    <option value="tdesc">Biggest target first</option>
+    <option value="name">By name</option>
+  </select>
+  <button class="linkish" id="expall">Expand all</button>
+</div>
+<div class="selsum" id="selsum"></div>
+<div id="stores"></div>
+
+<div class="notes" id="notes"></div>
+</div>
+
+<script>
+const RAW = [["BGMABR","BGM - AMBEDKAR ROAD","Rest of Karnataka","Antique Jewellery",462,690111,545,846998,1138],["BGMABR","BGM - AMBEDKAR ROAD","Rest of Karnataka","CZ Jewellery",358,561217,423,688002,727],["BGMABR","BGM - AMBEDKAR ROAD","Rest of Karnataka","Imported Jewellery",387,212793,469,261000,2035],["BGMABR","BGM - AMBEDKAR ROAD","Rest of Karnataka","Kundan Jewellery",26,67341,23,81999,108],["BGMABR","BGM - AMBEDKAR ROAD","Rest of Karnataka","Silver 92.5 Jewellery",171,254029,141,311000,495],["BGMABR","BGM - AMBEDKAR ROAD","Rest of Karnataka","Temple Silver Jewellery",63,281871,50,344999,189],["BGMMPR","","Rest of Karnataka","Antique Jewellery",0,0,448,686001,1362],["BGMMPR","","Rest of Karnataka","CZ Jewellery",0,0,359,540998,942],["BGMMPR","","Rest of Karnataka","Imported Jewellery",0,0,351,153999,2103],["BGMMPR","","Rest of Karnataka","Kundan Jewellery",0,0,15,64000,159],["BGMMPR","","Rest of Karnataka","Silver 92.5 Jewellery",0,0,73,185001,502],["BGMMPR","","Rest of Karnataka","Temple Silver Jewellery",0,0,33,244003,210],["BLR4JN","BLR - 4TH BLOCK JAYANAGAR","Bangalore","Antique Jewellery",466,741865,834,1358999,1517],["BLR4JN","BLR - 4TH BLOCK JAYANAGAR","Bangalore","CZ Jewellery",323,516022,574,945003,1450],["BLR4JN","BLR - 4TH BLOCK JAYANAGAR","Bangalore","Imported Jewellery",414,213807,749,391002,2945],["BLR4JN","BLR - 4TH BLOCK JAYANAGAR","Bangalore","Kundan Jewellery",69,234260,118,429002,213],["BLR4JN","BLR - 4TH BLOCK JAYANAGAR","Bangalore","Silver 92.5 Jewellery",137,235465,189,431000,731],["BLR4JN","BLR - 4TH BLOCK JAYANAGAR","Bangalore","Temple Silver Jewellery",64,258973,45,475001,430],["BLRARS","BLR - ARS COMPLEX MALLESHWARAM","Bangalore","Antique Jewellery",725,1215336,925,1583997,816],["BLRARS","BLR - ARS COMPLEX MALLESHWARAM","Bangalore","CZ Jewellery",375,589114,479,768001,468],["BLRARS","BLR - ARS COMPLEX MALLESHWARAM","Bangalore","Imported Jewellery",119,62637,152,82001,1590],["BLRARS","BLR - ARS COMPLEX MALLESHWARAM","Bangalore","Kundan Jewellery",37,117481,40,152999,106],["BLRARS","BLR - ARS COMPLEX MALLESHWARAM","Bangalore","Silver 92.5 Jewellery",92,129990,89,169000,446],["BLRARS","BLR - ARS COMPLEX MALLESHWARAM","Bangalore","Temple Silver Jewellery",93,388750,53,506002,251],["BLRBEL","BLR - BEL ROAD","Bangalore","Antique Jewellery",427,787734,524,1011000,1315],["BLRBEL","BLR - BEL ROAD","Bangalore","CZ Jewellery",332,549612,409,706000,831],["BLRBEL","BLR - BEL ROAD","Bangalore","Imported Jewellery",447,233652,568,300000,2290],["BLRBEL","BLR - BEL ROAD","Bangalore","Kundan Jewellery",33,127390,34,164000,176],["BLRBEL","BLR - BEL ROAD","Bangalore","Silver 92.5 Jewellery",129,191704,97,246000,599],["BLRBEL","BLR - BEL ROAD","Bangalore","Temple Silver Jewellery",43,169330,29,218000,274],["BLRBRO","","Bangalore","Antique Jewellery",0,0,0,0,1292],["BLRBRO","","Bangalore","CZ Jewellery",0,0,0,0,1270],["BLRBRO","","Bangalore","Imported Jewellery",0,0,0,0,2587],["BLRBRO","","Bangalore","Kundan Jewellery",0,0,0,0,149],["BLRBRO","","Bangalore","Silver 92.5 Jewellery",0,0,0,0,554],["BLRBRO","","Bangalore","Temple Silver Jewellery",0,0,0,0,353],["BLRBSW","BLR - BASAWESHWAR NAGAR","Bangalore","Antique Jewellery",828,1277649,1010,1586999,1150],["BLRBSW","BLR - BASAWESHWAR NAGAR","Bangalore","CZ Jewellery",472,800814,568,994999,844],["BLRBSW","BLR - BASAWESHWAR NAGAR","Bangalore","Imported Jewellery",572,273457,702,339000,2313],["BLRBSW","BLR - BASAWESHWAR NAGAR","Bangalore","Kundan Jewellery",56,218328,64,271000,134],["BLRBSW","BLR - BASAWESHWAR NAGAR","Bangalore","Silver 92.5 Jewellery",114,210899,87,262001,500],["BLRBSW","BLR - BASAWESHWAR NAGAR","Bangalore","Temple Silver Jewellery",161,791257,125,983000,640],["BLRCST","BLR - COMMERCIAL STREET","Bangalore","Antique Jewellery",1327,2254028,1764,3040000,2104],["BLRCST","BLR - COMMERCIAL STREET","Bangalore","CZ Jewellery",1297,2474702,1730,3337002,1855],["BLRCST","BLR - COMMERCIAL STREET","Bangalore","Imported Jewellery",1091,578734,1465,781001,3711],["BLRCST","BLR - COMMERCIAL STREET","Bangalore","Kundan Jewellery",284,1165876,370,1572999,498],["BLRCST","BLR - COMMERCIAL STREET","Bangalore","Silver 92.5 Jewellery",318,678134,348,915000,913],["BLRCST","BLR - COMMERCIAL STREET","Bangalore","Temple Silver Jewellery",161,824911,119,1113003,729],["BLRDVG","BLR - DVG ROAD","Bangalore","Antique Jewellery",644,993589,722,1147997,1293],["BLRDVG","BLR - DVG ROAD","Bangalore","CZ Jewellery",354,542012,390,626000,880],["BLRDVG","BLR - DVG ROAD","Bangalore","Imported Jewellery",495,258709,561,298000,2345],["BLRDVG","BLR - DVG ROAD","Bangalore","Kundan Jewellery",42,142698,41,164999,138],["BLRDVG","BLR - DVG ROAD","Bangalore","Silver 92.5 Jewellery",163,284032,141,328000,569],["BLRDVG","BLR - DVG ROAD","Bangalore","Temple Silver Jewellery",113,490017,69,566000,296],["BLRFSB","BLR - FORUM SOUTH BANGALORE","Bangalore","Antique Jewellery",1101,1610589,1338,1986997,1041],["BLRFSB","BLR - FORUM SOUTH BANGALORE","Bangalore","CZ Jewellery",857,1339004,1045,1653000,821],["BLRFSB","BLR - FORUM SOUTH BANGALORE","Bangalore","Imported Jewellery",1822,924391,2237,1140000,2813],["BLRFSB","BLR - FORUM SOUTH BANGALORE","Bangalore","Kundan Jewellery",88,316448,101,391000,272],["BLRFSB","BLR - FORUM SOUTH BANGALORE","Bangalore","Silver 92.5 Jewellery",432,700322,374,865001,717],["BLRFSB","BLR - FORUM SOUTH BANGALORE","Bangalore","Temple Silver Jewellery",137,752001,98,928000,411],["BLRGRD","BLR - GARUDA MALL","Bangalore","Antique Jewellery",173,194275,192,233996,1007],["BLRGRD","BLR - GARUDA MALL","Bangalore","CZ Jewellery",146,227073,158,274000,621],["BLRGRD","BLR - GARUDA MALL","Bangalore","Imported Jewellery",413,212260,490,256000,1912],["BLRGRD","BLR - GARUDA MALL","Bangalore","Kundan Jewellery",18,42510,14,52001,117],["BLRGRD","BLR - GARUDA MALL","Bangalore","Silver 92.5 Jewellery",67,103120,51,124000,453],["BLRHNR","BLR - HENNUR ROAD","Bangalore","Antique Jewellery",544,897256,590,1008002,1394],["BLRHNR","BLR - HENNUR ROAD","Bangalore","CZ Jewellery",418,653230,452,734001,1054],["BLRHNR","BLR - HENNUR ROAD","Bangalore","Imported Jewellery",609,326117,675,366000,2286],["BLRHNR","BLR - HENNUR ROAD","Bangalore","Kundan Jewellery",41,163139,38,184001,180],["BLRHNR","BLR - HENNUR ROAD","Bangalore","Silver 92.5 Jewellery",157,268277,119,302000,600],["BLRHNR","BLR - HENNUR ROAD","Bangalore","Temple Silver Jewellery",97,448334,65,504002,303],["BLRHSR","BLR - HSR LAYOUT","Bangalore","Antique Jewellery",1769,3098196,2093,3704002,2058],["BLRHSR","BLR - HSR LAYOUT","Bangalore","CZ Jewellery",1322,2179419,1560,2605999,1952],["BLRHSR","BLR - HSR LAYOUT","Bangalore","Imported Jewellery",1378,721136,1638,861999,3635],["BLRHSR","BLR - HSR LAYOUT","Bangalore","Kundan Jewellery",215,775374,247,927000,423],["BLRHSR","BLR - HSR LAYOUT","Bangalore","Silver 92.5 Jewellery",462,776515,406,928000,966],["BLRHSR","BLR - HSR LAYOUT","Bangalore","Temple Silver Jewellery",224,1126441,122,1347000,805],["BLRIND","BLR - INDIRANAGAR","Bangalore","Antique Jewellery",837,1382498,1125,1892000,1246],["BLRIND","BLR - INDIRANAGAR","Bangalore","CZ Jewellery",603,1021510,803,1399003,1003],["BLRIND","BLR - INDIRANAGAR","Bangalore","Imported Jewellery",836,453450,1136,621002,2412],["BLRIND","BLR - INDIRANAGAR","Bangalore","Kundan Jewellery",105,376044,133,515001,305],["BLRIND","BLR - INDIRANAGAR","Bangalore","Silver 92.5 Jewellery",203,326237,190,446999,623],["BLRIND","BLR - INDIRANAGAR","Bangalore","Temple Silver Jewellery",141,753332,90,1030999,640],["BLRJAY","BLR - JAYNAGAR","Bangalore","Antique Jewellery",1687,2931320,2404,4208999,1974],["BLRJAY","BLR - JAYNAGAR","Bangalore","CZ Jewellery",1121,1772537,1593,2550000,1707],["BLRJAY","BLR - JAYNAGAR","Bangalore","Imported Jewellery",1197,604176,1713,869000,3656],["BLRJAY","BLR - JAYNAGAR","Bangalore","Kundan Jewellery",192,550662,267,792001,441],["BLRJAY","BLR - JAYNAGAR","Bangalore","Silver 92.5 Jewellery",358,585259,375,841999,953],["BLRJAY","BLR - JAYNAGAR","Bangalore","Temple Silver Jewellery",236,1453865,179,2092001,1384],["BLRKGP","BLR - KATHRIGUPPE","Bangalore","Antique Jewellery",539,868003,628,1047000,1237],["BLRKGP","BLR - KATHRIGUPPE","Bangalore","CZ Jewellery",350,510735,402,615002,828],["BLRKGP","BLR - KATHRIGUPPE","Bangalore","Imported Jewellery",465,248891,554,300000,2412],["BLRKGP","BLR - KATHRIGUPPE","Bangalore","Kundan Jewellery",20,64030,18,78001,132],["BLRKGP","BLR - KATHRIGUPPE","Bangalore","Silver 92.5 Jewellery",141,231767,119,279001,531],["BLRKGP","BLR - KATHRIGUPPE","Bangalore","Temple Silver Jewellery",81,322692,34,388000,350],["BLRKHL","BLR - KAMMANAHALLI","Bangalore","Antique Jewellery",905,1516443,1062,1813999,1228],["BLRKHL","BLR - KAMMANAHALLI","Bangalore","CZ Jewellery",657,1014771,768,1214000,1018],["BLRKHL","BLR - KAMMANAHALLI","Bangalore","Imported Jewellery",804,411960,953,491998,2456],["BLRKHL","BLR - KAMMANAHALLI","Bangalore","Kundan Jewellery",67,188990,70,226000,235],["BLRKHL","BLR - KAMMANAHALLI","Bangalore","Silver 92.5 Jewellery",242,374855,215,449001,601],["BLRKHL","BLR - KAMMANAHALLI","Bangalore","Temple Silver Jewellery",127,692443,120,827999,493],["BLRKMG","","Bangalore","CZ Jewellery",0,0,0,0,2],["BLRKRP","BLR - K R PURAM","Bangalore","Antique Jewellery",640,1098639,651,1157999,1501],["BLRKRP","BLR - K R PURAM","Bangalore","CZ Jewellery",339,613878,339,646999,1289],["BLRKRP","BLR - K R PURAM","Bangalore","Imported Jewellery",353,176953,364,186001,2311],["BLRKRP","BLR - K R PURAM","Bangalore","Kundan Jewellery",29,126155,22,134000,199],["BLRKRP","BLR - K R PURAM","Bangalore","Silver 92.5 Jewellery",225,313349,143,329999,609],["BLRKRP","BLR - K R PURAM","Bangalore","Temple Silver Jewellery",101,526491,51,556001,300],["BLRMAL","BLR - MALLESWARAM","Bangalore","Antique Jewellery",592,977223,687,1168998,1290],["BLRMAL","BLR - MALLESWARAM","Bangalore","CZ Jewellery",275,454624,313,545001,764],["BLRMAL","BLR - MALLESWARAM","Bangalore","Imported Jewellery",367,186603,432,224000,2162],["BLRMAL","BLR - MALLESWARAM","Bangalore","Kundan Jewellery",29,68496,27,80999,133],["BLRMAL","BLR - MALLESWARAM","Bangalore","Silver 92.5 Jewellery",68,116555,50,140000,541],["BLRMAL","BLR - MALLESWARAM","Bangalore","Temple Silver Jewellery",60,245448,37,292998,341],["BLRMNT","BLR - MANTRI MALL","Bangalore","Antique Jewellery",831,1261056,1047,1620000,1346],["BLRMNT","BLR - MANTRI MALL","Bangalore","CZ Jewellery",607,921906,758,1185000,1284],["BLRMNT","BLR - MANTRI MALL","Bangalore","Imported Jewellery",854,421456,1091,541002,3144],["BLRMNT","BLR - MANTRI MALL","Bangalore","Kundan Jewellery",67,167049,76,213999,262],["BLRMNT","BLR - MANTRI MALL","Bangalore","Silver 92.5 Jewellery",179,276791,169,355999,734],["BLRMNT","BLR - MANTRI MALL","Bangalore","Temple Silver Jewellery",102,548896,63,704999,486],["BLRMOA","BLR - MALL OF ASIA","Bangalore","Antique Jewellery",873,1331681,1173,1815997,1175],["BLRMOA","BLR - MALL OF ASIA","Bangalore","CZ Jewellery",609,946554,811,1291002,1151],["BLRMOA","BLR - MALL OF ASIA","Bangalore","Imported Jewellery",845,457464,1147,624000,2777],["BLRMOA","BLR - MALL OF ASIA","Bangalore","Kundan Jewellery",96,362668,119,494000,335],["BLRMOA","BLR - MALL OF ASIA","Bangalore","Silver 92.5 Jewellery",279,436835,285,595999,706],["BLRMOA","BLR - MALL OF ASIA","Bangalore","Temple Silver Jewellery",105,479310,84,654999,242],["BLRNKM","BLR - NEXUS KORAMANGALA MALL","Bangalore","Antique Jewellery",554,783989,606,886999,1303],["BLRNKM","BLR - NEXUS KORAMANGALA MALL","Bangalore","CZ Jewellery",433,636466,470,719001,815],["BLRNKM","BLR - NEXUS KORAMANGALA MALL","Bangalore","Imported Jewellery",1118,605582,1258,684999,1849],["BLRNKM","BLR - NEXUS KORAMANGALA MALL","Bangalore","Kundan Jewellery",58,150939,57,170001,213],["BLRNKM","BLR - NEXUS KORAMANGALA MALL","Bangalore","Silver 92.5 Jewellery",292,479987,223,543000,589],["BLRNKM","BLR - NEXUS KORAMANGALA MALL","Bangalore","Temple Silver Jewellery",34,147678,25,167000,177],["BLRORN","BLR - ORION MALL","Bangalore","Antique Jewellery",714,1119098,871,1404003,1262],["BLRORN","BLR - ORION MALL","Bangalore","CZ Jewellery",568,847734,696,1064000,1217],["BLRORN","BLR - ORION MALL","Bangalore","Imported Jewellery",799,424398,995,531999,3133],["BLRORN","BLR - ORION MALL","Bangalore","Kundan Jewellery",73,282972,82,354000,179],["BLRORN","BLR - ORION MALL","Bangalore","Silver 92.5 Jewellery",307,504712,275,633001,694],["BLRORN","BLR - ORION MALL","Bangalore","Temple Silver Jewellery",106,473667,82,594001,293],["BLRRMM","BLR - ROYAL MEENAKSHI MALL","Bangalore","Antique Jewellery",464,665603,495,737998,1264],["BLRRMM","BLR - ROYAL MEENAKSHI MALL","Bangalore","CZ Jewellery",391,563315,416,625002,925],["BLRRMM","BLR - ROYAL MEENAKSHI MALL","Bangalore","Imported Jewellery",394,209147,430,231000,2268],["BLRRMM","BLR - ROYAL MEENAKSHI MALL","Bangalore","Kundan Jewellery",27,132767,21,146998,176],["BLRRMM","BLR - ROYAL MEENAKSHI MALL","Bangalore","Silver 92.5 Jewellery",147,230595,85,255000,562],["BLRRMM","BLR - ROYAL MEENAKSHI MALL","Bangalore","Temple Silver Jewellery",63,250288,35,277999,177],["BLRRMZ","BLR - RMZ MALL","Bangalore","Antique Jewellery",579,855972,634,959004,1152],["BLRRMZ","BLR - RMZ MALL","Bangalore","CZ Jewellery",386,585376,418,656000,727],["BLRRMZ","BLR - RMZ MALL","Bangalore","Imported Jewellery",544,304425,604,342000,2275],["BLRRMZ","BLR - RMZ MALL","Bangalore","Kundan Jewellery",34,98214,27,110001,111],["BLRRMZ","BLR - RMZ MALL","Bangalore","Silver 92.5 Jewellery",162,243758,128,273999,549],["BLRRMZ","BLR - RMZ MALL","Bangalore","Temple Silver Jewellery",56,206987,22,232002,164],["BLRRRN","BLR - RR NAGAR","Bangalore","Antique Jewellery",918,1409276,986,1546002,1061],["BLRRRN","BLR - RR NAGAR","Bangalore","CZ Jewellery",563,888825,598,978001,777],["BLRRRN","BLR - RR NAGAR","Bangalore","Imported Jewellery",886,458581,968,504001,2420],["BLRRRN","BLR - RR NAGAR","Bangalore","Kundan Jewellery",52,167235,49,183001,159],["BLRRRN","BLR - RR NAGAR","Bangalore","Silver 92.5 Jewellery",246,387478,205,424999,564],["BLRRRN","BLR - RR NAGAR","Bangalore","Temple Silver Jewellery",144,782138,113,859003,505],["BLRSKR","BLR - SAHAKARNAGAR","Bangalore","Antique Jewellery",851,1335478,1048,1676000,1266],["BLRSKR","BLR - SAHAKARNAGAR","Bangalore","CZ Jewellery",651,1009757,801,1269998,1024],["BLRSKR","BLR - SAHAKARNAGAR","Bangalore","Imported Jewellery",879,450648,1095,566000,2541],["BLRSKR","BLR - SAHAKARNAGAR","Bangalore","Kundan Jewellery",66,195523,74,246000,264],["BLRSKR","BLR - SAHAKARNAGAR","Bangalore","Silver 92.5 Jewellery",219,319898,173,402001,655],["BLRSKR","BLR - SAHAKARNAGAR","Bangalore","Temple Silver Jewellery",164,947002,125,1189999,785],["BLRSMR","","Bangalore","Antique Jewellery",0,0,768,1245000,2424],["BLRSMR","","Bangalore","CZ Jewellery",0,0,465,800999,2059],["BLRSMR","","Bangalore","Imported Jewellery",0,0,595,307000,3246],["BLRSMR","","Bangalore","Kundan Jewellery",0,0,58,215000,368],["BLRSMR","","Bangalore","Silver 92.5 Jewellery",0,0,133,291001,760],["BLRSMR","","Bangalore","Temple Silver Jewellery",0,0,37,538999,464],["BLRSNK","BLR - FORUM SHANTINIKETAN MALL","Bangalore","Antique Jewellery",1086,1802450,1155,1953000,1244],["BLRSNK","BLR - FORUM SHANTINIKETAN MALL","Bangalore","CZ Jewellery",728,1179982,767,1278001,1050],["BLRSNK","BLR - FORUM SHANTINIKETAN MALL","Bangalore","Imported Jewellery",1342,681470,1445,739001,2687],["BLRSNK","BLR - FORUM SHANTINIKETAN MALL","Bangalore","Kundan Jewellery",83,298564,81,324001,257],["BLRSNK","BLR - FORUM SHANTINIKETAN MALL","Bangalore","Silver 92.5 Jewellery",237,398109,143,431000,578],["BLRSNK","BLR - FORUM SHANTINIKETAN MALL","Bangalore","Temple Silver Jewellery",93,396517,58,430002,183],["BLRVGA","BLR - VEGA CITY MALL","Bangalore","Antique Jewellery",538,834390,627,1009999,1369],["BLRVGA","BLR - VEGA CITY MALL","Bangalore","CZ Jewellery",317,519084,366,627999,1013],["BLRVGA","BLR - VEGA CITY MALL","Bangalore","Imported Jewellery",633,330790,759,401000,2711],["BLRVGA","BLR - VEGA CITY MALL","Bangalore","Kundan Jewellery",43,131725,45,159000,192],["BLRVGA","BLR - VEGA CITY MALL","Bangalore","Silver 92.5 Jewellery",126,191420,94,232001,601],["BLRVGA","BLR - VEGA CITY MALL","Bangalore","Temple Silver Jewellery",55,242820,50,294001,148],["BLRWMR","","Bangalore","Antique Jewellery",0,0,451,719999,1505],["BLRWMR","","Bangalore","CZ Jewellery",0,0,278,463999,1003],["BLRWMR","","Bangalore","Imported Jewellery",0,0,381,177001,2458],["BLRWMR","","Bangalore","Kundan Jewellery",0,0,30,124999,158],["BLRWMR","","Bangalore","Silver 92.5 Jewellery",0,0,76,168000,599],["BLRWMR","","Bangalore","Temple Silver Jewellery",0,0,31,311999,380],["BLRWPX","BLR - PHOENIX MALL WHITEFIELD","Bangalore","Antique Jewellery",1007,1704465,1207,2071000,1246],["BLRWPX","BLR - PHOENIX MALL WHITEFIELD","Bangalore","CZ Jewellery",1133,1972598,1356,2396005,1368],["BLRWPX","BLR - PHOENIX MALL WHITEFIELD","Bangalore","Imported Jewellery",1110,586623,1340,712999,3278],["BLRWPX","BLR - PHOENIX MALL WHITEFIELD","Bangalore","Kundan Jewellery",173,575589,201,699999,346],["BLRWPX","BLR - PHOENIX MALL WHITEFIELD","Bangalore","Silver 92.5 Jewellery",414,688271,406,836001,779],["BLRWPX","BLR - PHOENIX MALL WHITEFIELD","Bangalore","Temple Silver Jewellery",122,477584,72,580001,431],["BLYIFR","","Rest of Karnataka","Antique Jewellery",0,0,0,0,805],["BLYIFR","","Rest of Karnataka","CZ Jewellery",0,0,0,0,492],["BLYIFR","","Rest of Karnataka","Imported Jewellery",0,0,0,0,1883],["BLYIFR","","Rest of Karnataka","Kundan Jewellery",0,0,0,0,60],["BLYIFR","","Rest of Karnataka","Silver 92.5 Jewellery",0,0,0,0,339],["BLYIFR","","Rest of Karnataka","Temple Silver Jewellery",0,0,0,0,41],["HBLGKR","HBL - GOKUL ROAD","Rest of Karnataka","Antique Jewellery",612,914045,772,1187999,1556],["HBLGKR","HBL - GOKUL ROAD","Rest of Karnataka","CZ Jewellery",284,471283,355,612002,1058],["HBLGKR","HBL - GOKUL ROAD","Rest of Karnataka","Imported Jewellery",295,157292,374,204000,2317],["HBLGKR","HBL - GOKUL ROAD","Rest of Karnataka","Kundan Jewellery",13,38868,11,51001,154],["HBLGKR","HBL - GOKUL ROAD","Rest of Karnataka","Silver 92.5 Jewellery",174,259883,179,338000,614],["HBLGKR","HBL - GOKUL ROAD","Rest of Karnataka","Temple Silver Jewellery",67,255344,51,332002,409],["HBLKPR","HBL - KOPPIKAR ROAD","Rest of Karnataka","Antique Jewellery",698,1072478,1134,1769002,1384],["HBLKPR","HBL - KOPPIKAR ROAD","Rest of Karnataka","CZ Jewellery",308,483722,491,797002,937],["HBLKPR","HBL - KOPPIKAR ROAD","Rest of Karnataka","Imported Jewellery",350,184391,568,304000,2462],["HBLKPR","HBL - KOPPIKAR ROAD","Rest of Karnataka","Kundan Jewellery",33,102931,46,169999,134],["HBLKPR","HBL - KOPPIKAR ROAD","Rest of Karnataka","Silver 92.5 Jewellery",84,120840,81,198999,638],["HBLKPR","HBL - KOPPIKAR ROAD","Rest of Karnataka","Temple Silver Jewellery",78,371036,51,610999,520],["HSPVCR","HSP - VIJAYANAGAR COLLEGE ROAD","Rest of Karnataka","Antique Jewellery",496,766056,618,991002,1283],["HSPVCR","HSP - VIJAYANAGAR COLLEGE ROAD","Rest of Karnataka","CZ Jewellery",290,475087,354,615001,722],["HSPVCR","HSP - VIJAYANAGAR COLLEGE ROAD","Rest of Karnataka","Imported Jewellery",304,153849,384,199000,2045],["HSPVCR","HSP - VIJAYANAGAR COLLEGE ROAD","Rest of Karnataka","Kundan Jewellery",33,95761,35,122998,150],["HSPVCR","HSP - VIJAYANAGAR COLLEGE ROAD","Rest of Karnataka","Silver 92.5 Jewellery",123,196228,119,253001,471],["HSPVCR","HSP - VIJAYANAGAR COLLEGE ROAD","Rest of Karnataka","Temple Silver Jewellery",71,309053,49,398999,238],["KCHFRM","KCH - FORUM MALL","Kerala","Antique Jewellery",449,610700,339,491002,1084],["KCHFRM","KCH - FORUM MALL","Kerala","CZ Jewellery",368,686713,277,551999,1031],["KCHFRM","KCH - FORUM MALL","Kerala","Imported Jewellery",447,251630,353,203001,2534],["KCHFRM","KCH - FORUM MALL","Kerala","Kundan Jewellery",37,115470,21,91999,157],["KCHFRM","KCH - FORUM MALL","Kerala","Silver 92.5 Jewellery",174,267966,89,216000,645],["KCHFRM","KCH - FORUM MALL","Kerala","Temple Silver Jewellery",20,66060,7,53999,109],["KCHLUL","KCH - LULU MALL","Kerala","Antique Jewellery",938,1338112,822,1200001,1305],["KCHLUL","KCH - LULU MALL","Kerala","CZ Jewellery",596,1031562,518,926004,904],["KCHLUL","KCH - LULU MALL","Kerala","Imported Jewellery",867,468816,770,421001,2837],["KCHLUL","KCH - LULU MALL","Kerala","Kundan Jewellery",74,259412,59,232999,162],["KCHLUL","KCH - LULU MALL","Kerala","Silver 92.5 Jewellery",357,543637,236,488001,698],["KCHLUL","KCH - LULU MALL","Kerala","Temple Silver Jewellery",33,132990,12,131999,139],["KCHMGR","KCH - MG ROAD","Kerala","Antique Jewellery",336,578060,328,607001,1475],["KCHMGR","KCH - MG ROAD","Kerala","CZ Jewellery",224,456102,221,477999,998],["KCHMGR","KCH - MG ROAD","Kerala","Imported Jewellery",180,91785,182,96000,2333],["KCHMGR","KCH - MG ROAD","Kerala","Kundan Jewellery",57,245810,51,258001,144],["KCHMGR","KCH - MG ROAD","Kerala","Silver 92.5 Jewellery",92,153400,68,161000,556],["KCHMGR","KCH - MG ROAD","Kerala","Temple Silver Jewellery",26,112975,15,118999,110],["MGLBMT","MGL - BALMATTA","Rest of Karnataka","Antique Jewellery",300,486855,412,701001,1173],["MGLBMT","MGL - BALMATTA","Rest of Karnataka","CZ Jewellery",319,566475,441,816001,641],["MGLBMT","MGL - BALMATTA","Rest of Karnataka","Imported Jewellery",229,121169,323,175000,2051],["MGLBMT","MGL - BALMATTA","Rest of Karnataka","Kundan Jewellery",31,119350,37,170999,145],["MGLBMT","MGL - BALMATTA","Rest of Karnataka","Silver 92.5 Jewellery",72,101887,53,146000,479],["MGLBMT","MGL - BALMATTA","Rest of Karnataka","Temple Silver Jewellery",36,178659,18,257999,173],["MGLCCM","MGL - CITY CENTER MALL","Rest of Karnataka","Antique Jewellery",470,661282,672,975998,1228],["MGLCCM","MGL - CITY CENTER MALL","Rest of Karnataka","CZ Jewellery",333,472425,479,697003,670],["MGLCCM","MGL - CITY CENTER MALL","Rest of Karnataka","Imported Jewellery",417,212697,608,314001,2210],["MGLCCM","MGL - CITY CENTER MALL","Rest of Karnataka","Kundan Jewellery",30,71015,37,105000,143],["MGLCCM","MGL - CITY CENTER MALL","Rest of Karnataka","Silver 92.5 Jewellery",97,162649,84,239999,472],["MGLCCM","MGL - CITY CENTER MALL","Rest of Karnataka","Temple Silver Jewellery",35,141838,23,208000,142],["MGLNFM","MGL - NEXUS FIZA MALL","Rest of Karnataka","Antique Jewellery",180,225110,147,204996,1094],["MGLNFM","MGL - NEXUS FIZA MALL","Rest of Karnataka","CZ Jewellery",208,263550,173,239000,498],["MGLNFM","MGL - NEXUS FIZA MALL","Rest of Karnataka","Imported Jewellery",295,150812,262,137001,1831],["MGLNFM","MGL - NEXUS FIZA MALL","Rest of Karnataka","Kundan Jewellery",23,56189,14,52000,122],["MGLNFM","MGL - NEXUS FIZA MALL","Rest of Karnataka","Silver 92.5 Jewellery",91,128672,54,116999,427],["MGLNFM","MGL - NEXUS FIZA MALL","Rest of Karnataka","Temple Silver Jewellery",24,80810,8,74000,210],["MYSDUR","MYS - DEVRAJ URS ROAD","Rest of Karnataka","Antique Jewellery",1018,1673598,1461,2438997,1648],["MYSDUR","MYS - DEVRAJ URS ROAD","Rest of Karnataka","CZ Jewellery",516,787669,730,1147000,1205],["MYSDUR","MYS - DEVRAJ URS ROAD","Rest of Karnataka","Imported Jewellery",641,326220,927,475000,3068],["MYSDUR","MYS - DEVRAJ URS ROAD","Rest of Karnataka","Kundan Jewellery",44,121602,56,177001,262],["MYSDUR","MYS - DEVRAJ URS ROAD","Rest of Karnataka","Silver 92.5 Jewellery",148,224667,137,327000,647],["MYSDUR","MYS - DEVRAJ URS ROAD","Rest of Karnataka","Temple Silver Jewellery",277,1471303,192,2144001,1146],["MYSMOM","MYS - MALL OF MYSORE","Rest of Karnataka","Antique Jewellery",235,295611,247,336002,1076],["MYSMOM","MYS - MALL OF MYSORE","Rest of Karnataka","CZ Jewellery",125,181673,124,206000,566],["MYSMOM","MYS - MALL OF MYSORE","Rest of Karnataka","Imported Jewellery",220,111653,245,127000,1951],["MYSMOM","MYS - MALL OF MYSORE","Rest of Karnataka","Kundan Jewellery",15,36290,10,41001,135],["MYSMOM","MYS - MALL OF MYSORE","Rest of Karnataka","Silver 92.5 Jewellery",100,185890,64,185002,422],["MYSMOM","MYS - MALL OF MYSORE","Rest of Karnataka","Temple Silver Jewellery",43,200458,26,227001,199],["MYSNEX","MYS - NEXUS MALL","Rest of Karnataka","Antique Jewellery",303,402153,366,510998,1024],["MYSNEX","MYS - NEXUS MALL","Rest of Karnataka","CZ Jewellery",227,347472,271,442001,547],["MYSNEX","MYS - NEXUS MALL","Rest of Karnataka","Imported Jewellery",397,217105,498,276000,1856],["MYSNEX","MYS - NEXUS MALL","Rest of Karnataka","Kundan Jewellery",24,49205,24,62000,118],["MYSNEX","MYS - NEXUS MALL","Rest of Karnataka","Silver 92.5 Jewellery",140,223282,151,284000,451],["MYSNEX","MYS - NEXUS MALL","Rest of Karnataka","Temple Silver Jewellery",58,203042,38,258001,188],["TRVLUL","TRV - LULU MALL","Kerala","Antique Jewellery",704,1074175,569,901000,893],["TRVLUL","TRV - LULU MALL","Kerala","CZ Jewellery",409,673586,325,564000,492],["TRVLUL","TRV - LULU MALL","Kerala","Imported Jewellery",545,279815,449,233999,1563],["TRVLUL","TRV - LULU MALL","Kerala","Kundan Jewellery",77,220463,55,184999,99],["TRVLUL","TRV - LULU MALL","Kerala","Silver 92.5 Jewellery",142,247090,89,187999,438],["UDPMMT","UDP - MAIN MARKET","Rest of Karnataka","Antique Jewellery",482,697833,707,1056998,1172],["UDPMMT","UDP - MAIN MARKET","Rest of Karnataka","CZ Jewellery",401,560255,594,847999,620],["UDPMMT","UDP - MAIN MARKET","Rest of Karnataka","Imported Jewellery",456,236473,683,359000,2120],["UDPMMT","UDP - MAIN MARKET","Rest of Karnataka","Kundan Jewellery",22,66999,25,101999,142],["UDPMMT","UDP - MAIN MARKET","Rest of Karnataka","Silver 92.5 Jewellery",103,143776,101,218001,446],["UDPMMT","UDP - MAIN MARKET","Rest of Karnataka","Temple Silver Jewellery",34,147568,40,223000,208]];
+const CATS = ["Antique Jewellery","CZ Jewellery","Imported Jewellery","Kundan Jewellery","Silver 92.5 Jewellery","Temple Silver Jewellery","Others"];
+const rows = RAW.map(r=>({store:r[0],name:r[1],region:r[2],cat:r[3],lyQty:r[4],lyGmv:r[5],tUnits:r[6],tRev:r[7],stock:r[8]}));
+
+const byStore = {};
+for(const r of rows){
+  if(!byStore[r.store]) byStore[r.store]={code:r.store,name:r.name,region:r.region,cats:[],ly:0,t:0};
+  const s=byStore[r.store];
+  if(r.name) s.name=r.name;
+  if(r.region) s.region=r.region;
+  s.cats.push(r); s.ly+=r.lyGmv; s.t+=r.tRev;
+}
+const stores = Object.values(byStore);
+const noTarget = stores.filter(s=>s.t===0&&s.ly===0);
+const active = stores.filter(s=>!(s.t===0&&s.ly===0));
+
+function cls(ly,t){
+  if(ly===0) return "new";
+  const g=t/ly-1;
+  if(g<=0) return "below";
+  if(g<=0.15) return "ok";
+  if(g<=0.35) return "stretch";
+  return "hard";
+}
+const CLSLBL={below:"Below LY",ok:"Achievable",stretch:"Stretch",hard:"Difficult",new:"New store"};
+function inr(n){return "â‚¹"+Math.round(n).toLocaleString("en-IN");}
+function lakh(n){
+  if(Math.abs(n)>=1e7) return "â‚¹"+(n/1e7).toFixed(2)+" Cr";
+  if(Math.abs(n)>=1e5) return "â‚¹"+(n/1e5).toFixed(1)+" L";
+  return inr(n);
+}
+function pct(g){return (g>0?"+":"")+(g*100).toFixed(g*100>=100?0:1)+"%";}
+
+// KPIs
+const existing=active.filter(s=>s.ly>0), news=active.filter(s=>s.ly===0&&s.t>0);
+const exLy=existing.reduce((a,s)=>a+s.ly,0), exT=existing.reduce((a,s)=>a+s.t,0);
+const totT=active.reduce((a,s)=>a+s.t,0);
+const hardN=existing.filter(s=>cls(s.ly,s.t)==="hard").length;
+const easyN=existing.filter(s=>["below","ok"].includes(cls(s.ly,s.t))).length;
+document.getElementById("kpis").innerHTML=`
+ <div class="kpi"><div class="lbl">Aug 2025 actual (LY)</div><div class="val">${lakh(exLy)}</div><div class="note">${existing.length} existing stores</div></div>
+ <div class="kpi"><div class="lbl">Aug FY27 target</div><div class="val">${lakh(totT)}</div><div class="note">incl. ${lakh(totT-exT)} for ${news.length} new stores</div></div>
+ <div class="kpi"><div class="lbl">Growth needed (existing)</div><div class="val">${pct(exT/exLy-1)}</div><div class="note">vs same month LY</div></div>
+ <div class="kpi"><div class="lbl">Difficulty split</div><div class="val">${hardN} / ${existing.length-hardN-easyN} / ${easyN}</div><div class="note">difficult / stretch / comfortable stores</div></div>`;
+
+// Category rollup (existing stores only)
+const catAgg={};
+for(const r of rows){
+  if(byStore[r.store].ly===0) continue;
+  if(!catAgg[r.cat])catAgg[r.cat]={ly:0,t:0};
+  catAgg[r.cat].ly+=r.lyGmv; catAgg[r.cat].t+=r.tRev;
+}
+document.getElementById("catgrid").innerHTML=Object.entries(catAgg)
+ .filter(([c,v])=>v.ly>0)
+ .sort((a,b)=>(b[1].t/b[1].ly)-(a[1].t/a[1].ly))
+ .map(([c,v])=>`<div class="catcard"><div class="c">${c}</div><div class="g">${pct(v.t/v.ly-1)}</div><div class="d">${lakh(v.ly)} â†’ ${lakh(v.t)}</div></div>`).join("");
+
+// Controls state
+const REGIONS=["All","Bangalore","Rest of Karnataka","Kerala","New stores"];
+let region="All", sort="gdesc";
+const sel=new Set();
+const chipbox=document.getElementById("regionchips");
+chipbox.innerHTML=REGIONS.map(r=>`<button class="chip${r==="All"?" on":""}" data-r="${r}">${r}</button>`).join(" ");
+chipbox.addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;region=b.dataset.r;
+  chipbox.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c===b));render();});
+document.getElementById("sortsel").addEventListener("change",e=>{sort=e.target.value;render();});
+let allOpen=false;
+document.getElementById("expall").addEventListener("click",()=>{allOpen=!allOpen;
+  document.querySelectorAll(".store").forEach(s=>s.classList.toggle("open",allOpen));
+  document.getElementById("expall").textContent=allOpen?"Collapse all":"Expand all";});
+
+// Multi-select store dropdown
+const msel=document.getElementById("msel"), mselbtn=document.getElementById("mselbtn"),
+      msellist=document.getElementById("msellist"), mselq=document.getElementById("mselq");
+const sorted=active.slice().sort((a,b)=>(a.name||a.code).localeCompare(b.name||b.code));
+function buildList(){
+  const f=(mselq.value||"").toLowerCase();
+  msellist.innerHTML=sorted
+    .filter(s=>!f||((s.name||"")+" "+s.code).toLowerCase().includes(f))
+    .map(s=>`<label><input type="checkbox" data-code="${s.code}"${sel.has(s.code)?" checked":""}> ${s.name||s.code}<span class="cd">${s.code}</span></label>`).join("");
+}
+function syncBtn(){
+  mselbtn.textContent=sel.size?`${sel.size} store${sel.size>1?"s":""} selected â–¾`:"Select stores â–¾";
+  mselbtn.classList.toggle("has",sel.size>0);
+}
+mselbtn.addEventListener("click",()=>{
+  msel.classList.toggle("open");
+  mselbtn.setAttribute("aria-expanded",msel.classList.contains("open"));
+  if(msel.classList.contains("open")){buildList();mselq.focus();}
+});
+document.addEventListener("click",e=>{if(!msel.contains(e.target)){msel.classList.remove("open");mselbtn.setAttribute("aria-expanded","false");}});
+mselq.addEventListener("input",buildList);
+msellist.addEventListener("change",e=>{
+  const cb=e.target.closest("input[type=checkbox]");if(!cb)return;
+  if(cb.checked)sel.add(cb.dataset.code);else sel.delete(cb.dataset.code);
+  syncBtn();render();
+});
+document.getElementById("mselclear").addEventListener("click",()=>{sel.clear();mselq.value="";buildList();syncBtn();render();});
+
+function storeRows(s){
+  const cats=s.cats.filter(r=>CATS.includes(r.cat)&&(r.lyGmv>0||r.tRev>0))
+    .sort((a,b)=>b.tRev-a.tRev);
+  return cats.map(r=>{
+    const c=cls(r.lyGmv,r.tRev);
+    const g=r.lyGmv>0?r.tRev/r.lyGmv-1:null;
+    const str=r.tUnits>0&&r.stock>0?r.tUnits/r.stock:null;
+    const stockBadge=str===null?"":str>=0.8?' <span class="badge b-stock">stock risk</span>':str>=0.5?' <span class="badge b-tight">tight</span>':"";
+    const barw=g===null?0:Math.min(100,Math.max(0,g*100));
+    const barc=c==="hard"?"var(--risk)":c==="stretch"?"var(--warn)":"var(--good)";
+    return `<tr>
+      <td>${r.cat}</td>
+      <td>${r.lyGmv?inr(r.lyGmv):'<span class="muted">â€”</span>'}</td>
+      <td>${inr(r.tRev)}</td>
+      <td>${g===null?'<span class="badge b-new">new</span>':`<span class="gbar"><i style="width:${barw}%;background:${barc}"></i></span>${pct(g)}`}</td>
+      <td>${r.lyQty||"â€”"}</td>
+      <td>${r.tUnits||"â€”"}</td>
+      <td>${r.stock||"â€”"}</td>
+      <td>${str===null?'<span class="muted">â€”</span>':(str*100).toFixed(0)+"%"+stockBadge}</td>
+      <td><span class="badge b-${c}">${CLSLBL[c]}</span></td>
+    </tr>`;}).join("");
+}
+
+function render(){
+  let list=active.slice();
+  if(sel.size>0){
+    list=list.filter(s=>sel.has(s.code));
+  } else if(region==="New stores"){
+    list=list.filter(s=>s.ly===0);
+  } else if(region!=="All"){
+    list=list.filter(s=>s.region===region);
+  }
+  list.sort((a,b)=>{
+    const ga=a.ly>0?a.t/a.ly-1:999, gb=b.ly>0?b.t/b.ly-1:999;
+    if(sort==="gdesc")return gb-ga;
+    if(sort==="gasc")return ga-gb;
+    if(sort==="tdesc")return b.t-a.t;
+    return (a.name||a.code).localeCompare(b.name||b.code);
+  });
+
+  // selection summary
+  const sumEl=document.getElementById("selsum");
+  if(sel.size>0){
+    const sly=list.reduce((a,s)=>a+s.ly,0), st=list.reduce((a,s)=>a+s.t,0);
+    const withBase=list.filter(s=>s.ly>0);
+    const bly=withBase.reduce((a,s)=>a+s.ly,0), bt=withBase.reduce((a,s)=>a+s.t,0);
+    sumEl.className="selsum show";
+    sumEl.innerHTML=`<b>${list.length} selected:</b> LY Aug <b>${lakh(sly)}</b> â†’ Target <b>${lakh(st)}</b>`+
+      (bly>0?` Â· growth needed on comparable stores <b>${pct(bt/bly-1)}</b>`:"")+
+      (list.length>withBase.length?` Â· includes ${list.length-withBase.length} new store(s)`:"");
+  } else { sumEl.className="selsum"; sumEl.innerHTML=""; }
+
+  document.getElementById("stores").innerHTML=list.map(s=>{
+    const c=cls(s.ly,s.t);
+    const g=s.ly>0?s.t/s.ly-1:null;
+    return `<div class="store${allOpen||sel.size>0?" open":""}">
+      <div class="store-head" tabindex="0" role="button" aria-expanded="${allOpen||sel.size>0}">
+        <div style="flex:1 1 240px"><div class="code">${s.code} Â· ${s.region||""}</div><div class="nm">${s.name||s.code}</div></div>
+        <div class="nums">LY <b>${lakh(s.ly)}</b> â†’ Target <b>${lakh(s.t)}</b></div>
+        <span class="badge b-${c}">${g===null?"New store":pct(g)+" Â· "+CLSLBL[c]}</span>
+      </div>
+      <div class="store-body"><div class="tblwrap"><table>
+        <thead><tr><th>Category</th><th>LY Aug GMV</th><th>Target Rev</th><th>Growth needed</th><th>LY Qty</th><th>Tgt Units</th><th>Stock</th><th>Req. sell-through</th><th>Verdict</th></tr></thead>
+        <tbody>${storeRows(s)}</tbody>
+      </table></div></div>
+    </div>`;}).join("");
+  document.querySelectorAll(".store-head").forEach(h=>{
+    const t=()=>{const st=h.closest(".store");st.classList.toggle("open");h.setAttribute("aria-expanded",st.classList.contains("open"));};
+    h.addEventListener("click",t);
+    h.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();t();}});
+  });
+}
+render();
+
+// Notes
+const newList=news.map(s=>`<b>${s.code}</b> (target ${lakh(s.t)})`).join(", ");
+const ntList=noTarget.map(s=>s.code).join(", ");
+document.getElementById("notes").innerHTML=`<b>Reading notes</b><ul>
+ <li>LY = Net GMV (after returns) from the Aug 2025 sales export; Target = "Rev Target" in Aug Targets FY27, summed over occasions and products per category.</li>
+ <li>Growth needed compares Aug 2026 target directly with Aug 2025 actual for the same store &amp; category.</li>
+ <li>Req. sell-through = target units &divide; units in stock. Above 80% is flagged <span class="badge b-stock">stock risk</span> &mdash; the store cannot hit the units target without replenishment during the month.</li>
+ <li>Pick specific stores with <b>Select stores</b> to compare them side by side; the bar above the list shows the combined ask. Selected stores open automatically.</li>
+ <li>New stores with a target but no LY base: ${newList||"none"}.</li>
+ <li>In the target file with stock but <b>zero</b> Aug target (likely opening later / excluded): ${ntList||"none"}. E-commerce (ECOM) and warehouse (WH) are excluded.</li>
+</ul>`;
+</script>
