@@ -278,6 +278,8 @@ function getYTD(upToMonth) {
 
   // Aggregate per store across all months
   var storeAgg = {}; // code → aggregated data
+  var monthsLoaded = []; // months that actually parsed — a silently skipped month
+                         // would otherwise drag the quarter target down and inflate Ach%
 
   for (var mi = 0; mi < monthsToRead.length; mi++) {
     var m = monthsToRead[mi];
@@ -296,6 +298,7 @@ function getYTD(upToMonth) {
     }
 
     Logger.log(m + ': ' + mData.stores.length + ' stores');
+    monthsLoaded.push(m);
 
     for (var si = 0; si < mData.stores.length; si++) {
       var s = mData.stores[si];
@@ -320,11 +323,21 @@ function getYTD(upToMonth) {
       a.ytdBills   += s.mtdBills   || 0;
       a.ytdWalkIns += s.mtdWalkIns || 0;
       a.ytdQty     += s.mtdSoldQty || 0;
+      // Per-month actuals AND per-month KPI targets, so the dashboard can build a
+      // month-wise target-vs-achievement table for any quarter without re-fetching.
+      var kt = s.kpiTargets || {};
       a.monthlyData[m] = {
-        sales:  s.mtdSales || 0,
-        target: s.target   || 0,
-        pct:    s.pct      || 0,
-        bills:  s.mtdBills || 0
+        sales:    s.mtdSales   || 0,
+        target:   s.target     || 0,
+        pct:      s.pct        || 0,
+        bills:    s.mtdBills   || 0,
+        walkIns:  s.mtdWalkIns || 0,
+        qty:      s.mtdSoldQty || 0,
+        tBills:   kt.bills      || 0,
+        tWalkIns: kt.walkIns    || 0,
+        tConv:    kt.conversion || 0,
+        tABV:     kt.abv        || 0,
+        tUPT:     kt.upt        || 0
       };
     }
   }
@@ -356,11 +369,13 @@ function getYTD(upToMonth) {
   Logger.log('YTD done: ' + stores.length + ' stores across ' + monthsToRead.length + ' months');
 
   return {
-    stores:     stores,
-    months:     monthsToRead,
-    upToMonth:  upToMonth,
-    quarter:    QTR_MAP[upToMonth] || 'Q1',
-    generatedAt: new Date().toISOString()
+    stores:       stores,
+    months:       monthsToRead,
+    monthsLoaded: monthsLoaded,
+    ytdVersion:   2,          // 2 = monthlyData carries per-month walk-ins, qty and KPI targets
+    upToMonth:    upToMonth,
+    quarter:      QTR_MAP[upToMonth] || 'Q1',
+    generatedAt:  new Date().toISOString()
   };
 }
 

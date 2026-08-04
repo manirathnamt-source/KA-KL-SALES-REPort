@@ -495,8 +495,8 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
     <th class="r" onclick="srt('t-ytd-store',8)">UPT</th>
   </tr></thead><tbody id="b-ytd-store"></tbody></table></div>
 
-  <!-- Month-wise breakdown table -->
-  <div class="sh"><span class="sh-t">Month-wise Breakdown</span><div class="sh-l"></div></div>
+  <!-- Month-wise KPI target vs achievement -->
+  <div class="sh"><span class="sh-t">Month-wise KPI &mdash; Target vs Achievement</span><div class="sh-l"></div></div>
   <div id="ytd-monthly-wrap" class="tw"></div>
 </div>
 
@@ -3028,24 +3028,31 @@ function renderYTD(){
   var qMonths=ytdQtrFilter?QTR_MONTHS[ytdQtrFilter]:null;
   var dispMonths=qMonths?months.filter(function(m){return qMonths.indexOf(m)!==-1;}):months;
 
-  function storeSales(s){
-    if(!qMonths)return s.ytdSales||0;
-    var t=0;qMonths.forEach(function(m){if(s.monthlyData&&s.monthlyData[m])t+=s.monthlyData[m].sales||0;});return t;
+  // Does the payload carry per-month walk-ins/qty/KPI targets? (Apps Script ytdVersion>=2)
+  // Without it a quarter view can show sales/target/bills but not conversion or UPT.
+  var perMonthKPI=(ytdData.ytdVersion||0)>=2;
+  // Every quarter-scoped figure must come from monthlyData — using the ytd* totals here
+  // was the bug: Q1 sales were divided by FULL-YTD bills/walk-ins, so ABV and Conv% were wrong.
+  function mSum(s,field,ytdKey){
+    if(!qMonths)return s[ytdKey]||0;
+    var t=0;qMonths.forEach(function(m){var d=s.monthlyData&&s.monthlyData[m];if(d)t+=d[field]||0;});return t;
   }
-  function storeTgt(s){
-    if(!qMonths)return s.ytdTarget||0;
-    var t=0;qMonths.forEach(function(m){if(s.monthlyData&&s.monthlyData[m])t+=s.monthlyData[m].target||0;});return t;
-  }
+  function storeSales(s){return mSum(s,'sales','ytdSales');}
+  function storeTgt(s){return mSum(s,'target','ytdTarget');}
+  function storeBills(s){return mSum(s,'bills','ytdBills');}
+  function storeWalks(s){return qMonths&&!perMonthKPI?0:mSum(s,'walkIns','ytdWalkIns');}
+  function storeQty(s){return qMonths&&!perMonthKPI?0:mSum(s,'qty','ytdQty');}
 
   // KPI summary
   var totSales=fStores.reduce(function(a,s){return a+storeSales(s);},0);
   var totTgt  =fStores.reduce(function(a,s){return a+storeTgt(s);},0);
-  var totBills=fStores.reduce(function(a,s){return a+(s.ytdBills||0);},0);
-  var totWalks=fStores.reduce(function(a,s){return a+(s.ytdWalkIns||0);},0);
+  var totBills=fStores.reduce(function(a,s){return a+storeBills(s);},0);
+  var totWalks=fStores.reduce(function(a,s){return a+storeWalks(s);},0);
   var achPct  =totTgt>0?Math.round(totSales/totTgt*100):0;
   var avgABV  =totBills>0?Math.round(totSales/totBills):0;
   var avgConv =totWalks>0?Math.round(totBills/totWalks*1000)/10:0;
-  var periodLabel=(ytdQtrFilter||'Full YTD')+' APR–'+upToMonth;
+  // Label the months actually on screen — with Q1 selected this said "APR–JUL" when the view was APR–JUN
+  var periodLabel=(ytdQtrFilter||'Full YTD')+' '+(dispMonths[0]||'APR')+'–'+(dispMonths[dispMonths.length-1]||upToMonth);
 
   // Update title
   var titleEl=document.getElementById('ytd-title');
@@ -3058,8 +3065,8 @@ function renderYTD(){
     {l:'YTD Target',  v:L(totTgt),    s:'cumulative', c:totTgt?'':'grn'},
     {l:'YTD Sales',   v:L(totSales),  s:achPct+'% achieved', c:achPct>=100?'grn':achPct>0?'':''},
     {l:'Stores',      v:fStores.length, s:'in view'},
-    {l:'Avg ABV',     v:avgABV?L(avgABV):'—', s:'ytd'},
-    {l:'Avg Conv%',   v:avgConv+'%',  s:'ytd'},
+    {l:'Avg ABV',     v:avgABV?L(avgABV):'—', s:ytdQtrFilter||'ytd'},
+    {l:'Avg Conv%',   v:totWalks>0?avgConv+'%':'—', s:totWalks>0?(ytdQtrFilter||'ytd'):'needs script v2'},
   ].map(function(c){
     return'<div class="kc '+(c.c||'')+'"><div class="kl">'+c.l+'</div><div class="kv">'+c.v+'</div><div class="ks">'+c.s+'</div></div>';
   }).join('');
@@ -3070,19 +3077,19 @@ function renderYTD(){
     var k=s.rm||'Unknown';
     if(!rmAgg[k])rmAgg[k]={name:k,sales:0,tgt:0,bills:0,walks:0,stores:0};
     rmAgg[k].sales+=storeSales(s);rmAgg[k].tgt+=storeTgt(s);
-    rmAgg[k].bills+=(s.ytdBills||0);rmAgg[k].walks+=(s.ytdWalkIns||0);rmAgg[k].stores++;
+    rmAgg[k].bills+=storeBills(s);rmAgg[k].walks+=storeWalks(s);rmAgg[k].stores++;
   });
   document.getElementById('b-ytd-rm').innerHTML=Object.values(rmAgg).sort(function(a,b){return b.sales-a.sales;}).map(function(g){
     var p=g.tgt>0?Math.round(g.sales/g.tgt*100):0;
     var abv=g.bills>0?Math.round(g.sales/g.bills):0;
-    var conv=g.walks>0?Math.round(g.bills/g.walks*1000)/10:0;
+    var conv=g.walks>0?Math.round(g.bills/g.walks*1000)/10+'%':'—';
     return'<tr>'+
       '<td style="font-weight:700;color:var(--primary);">'+g.name+'</td>'+
       '<td class="r">'+L(g.tgt)+'</td>'+
       '<td class="r" style="font-weight:700;">'+L(g.sales)+'</td>'+
       '<td class="r '+pc(p)+'">'+p+'%</td>'+
       '<td class="r">'+L(abv)+'</td>'+
-      '<td class="r">'+conv+'%</td>'+
+      '<td class="r">'+conv+'</td>'+
       '<td class="r">'+g.stores+'</td></tr>';
   }).join('')||nd(7,'No data');
 
@@ -3092,12 +3099,12 @@ function renderYTD(){
     var k=s.cm||'Unknown';
     if(!cmAgg[k])cmAgg[k]={name:k,rm:s.rm||'',sales:0,tgt:0,bills:0,walks:0,stores:0};
     cmAgg[k].sales+=storeSales(s);cmAgg[k].tgt+=storeTgt(s);
-    cmAgg[k].bills+=(s.ytdBills||0);cmAgg[k].walks+=(s.ytdWalkIns||0);cmAgg[k].stores++;
+    cmAgg[k].bills+=storeBills(s);cmAgg[k].walks+=storeWalks(s);cmAgg[k].stores++;
   });
   document.getElementById('b-ytd-cm').innerHTML=Object.values(cmAgg).sort(function(a,b){return b.sales-a.sales;}).map(function(g){
     var p=g.tgt>0?Math.round(g.sales/g.tgt*100):0;
     var abv=g.bills>0?Math.round(g.sales/g.bills):0;
-    var conv=g.walks>0?Math.round(g.bills/g.walks*1000)/10:0;
+    var conv=g.walks>0?Math.round(g.bills/g.walks*1000)/10+'%':'—';
     return'<tr>'+
       '<td style="font-weight:700;color:var(--primary);">'+g.name+'</td>'+
       '<td style="color:var(--text2);font-size:11px;">'+g.rm+'</td>'+
@@ -3105,7 +3112,7 @@ function renderYTD(){
       '<td class="r" style="font-weight:700;">'+L(g.sales)+'</td>'+
       '<td class="r '+pc(p)+'">'+p+'%</td>'+
       '<td class="r">'+L(abv)+'</td>'+
-      '<td class="r">'+conv+'%</td>'+
+      '<td class="r">'+conv+'</td>'+
       '<td class="r">'+g.stores+'</td></tr>';
   }).join('')||nd(8,'No data');
 
@@ -3113,6 +3120,11 @@ function renderYTD(){
   document.getElementById('b-ytd-store').innerHTML=fStores.map(function(s){
     var ss2=storeSales(s),tt=storeTgt(s);
     var p=tt>0?Math.round(ss2/tt*100):0;
+    // Scope ABV/Conv/UPT to the selected quarter too — s.abv/s.convActual/s.upt are full-YTD
+    var sb=storeBills(s),sw=storeWalks(s),sq=storeQty(s);
+    var sAbv =sb>0?Math.round(ss2/sb):0;
+    var sConv=sw>0?Math.round(sb/sw*1000)/10:null;
+    var sUpt =sb>0&&sq>0?sq/sb:null;
         var code=(s.code||'').replace(/['"]/g,'');
     var tr2=document.createElement('tr');
     tr2.style.cursor='pointer';
@@ -3125,45 +3137,98 @@ function renderYTD(){
       '<td class="r">'+L(tt)+'</td>'+
       '<td class="r" style="font-weight:700;">'+L(ss2)+'</td>'+
       '<td class="r '+pc(p)+'">'+p+'%</td>'+
-      '<td class="r">'+L(s.abv||0)+'</td>'+
-      '<td class="r">'+(s.convActual||0)+'%</td>'+
-      '<td class="r">'+R2(s.upt)+'</td>';
+      '<td class="r">'+(sAbv?L(sAbv):'—')+'</td>'+
+      '<td class="r">'+(sConv===null?'—':sConv+'%')+'</td>'+
+      '<td class="r">'+(sUpt===null?'—':R2(sUpt))+'</td>';
     return tr2.outerHTML;
   }).join('')||nd(9,'No data');
 
-  // Month-wise breakdown
+  renderYTDKpiMatrix(fStores,dispMonths,perMonthKPI,ytdData.monthsLoaded);
+}
+
+// ═══════════════════════════════════════════
+// YTD — one table: months across the columns, every KPI as Target / Ach / Ach%
+// ═══════════════════════════════════════════
+function renderYTDKpiMatrix(fStores,dispMonths,perMonthKPI,monthsLoaded){
   var mWrap=document.getElementById('ytd-monthly-wrap');
-  if(mWrap&&dispMonths.length){
-    var colW=Math.max(70, Math.floor(500/dispMonths.length))+'px';
-    var tbl='<table style="width:100%;border-collapse:collapse;font-size:12px;">'+
-      '<thead><tr style="background:var(--surface2);">'+
-        '<th style="padding:7px 12px;text-align:left;border-bottom:2px solid var(--border);font-size:10px;color:var(--text2);text-transform:uppercase;position:sticky;left:0;background:var(--surface2);">Store</th>'+
-        '<th style="padding:7px 10px;text-align:left;border-bottom:2px solid var(--border);font-size:10px;color:var(--text2);min-width:80px;">RM</th>'+
-        dispMonths.map(function(m){
-          return'<th style="padding:7px 10px;text-align:right;border-bottom:2px solid var(--border);font-size:10px;color:var(--text2);text-transform:uppercase;min-width:'+colW+';">'+m+'</th>';
-        }).join('')+
-        '<th style="padding:7px 12px;text-align:right;border-bottom:2px solid var(--border);font-size:10px;color:var(--primary);background:var(--primary-bg);min-width:90px;">TOTAL</th>'+
-      '</tr></thead><tbody>'+
-      fStores.slice(0,50).map(function(s){
-        var rowTotal=dispMonths.reduce(function(a,m){return a+(s.monthlyData&&s.monthlyData[m]?s.monthlyData[m].sales||0:0);},0);
-        return'<tr>'+
-          '<td style="padding:6px 12px;font-weight:700;color:var(--primary);border-bottom:1px solid var(--border);position:sticky;left:0;background:var(--surface);">'+s.code+'</td>'+
-          '<td style="padding:6px 10px;font-size:11px;color:var(--text2);border-bottom:1px solid var(--border);">'+s.rm+'</td>'+
-          dispMonths.map(function(m){
-            var md=s.monthlyData&&s.monthlyData[m];
-            var v=md?(md.sales||0):0;
-            var p=md&&md.target>0?Math.round(md.sales/md.target*100):null;
-            var col=v>0?(p>=100?'var(--green)':p>=85?'var(--amber)':'var(--red)'):'var(--text3)';
-            return'<td style="padding:6px 10px;text-align:right;font-family:monospace;font-size:11px;border-bottom:1px solid var(--border);color:'+col+';font-weight:'+(v>0?'600':'400')+';">'+(v>0?L(v):'—')+'</td>';
-          }).join('')+
-          '<td style="padding:6px 12px;text-align:right;font-weight:800;font-family:monospace;border-bottom:1px solid var(--border);background:var(--primary-bg);color:var(--primary);">'+L(rowTotal)+'</td>'+
-        '</tr>';
-      }).join('')+
-      '</tbody></table>';
-    mWrap.innerHTML='<div style="overflow-x:auto;">'+tbl+'</div>';
-  } else if(mWrap){
+  if(!mWrap)return;
+  if(!dispMonths.length){
     mWrap.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);">No month data for selected quarter</div>';
+    return;
   }
+  // Roll every filtered store up per month. Ratio targets (conv/ABV/UPT) are averaged
+  // weighted by each store's sales target, so a big store counts more than a small one.
+  function bucket(ms){
+    var b={sales:0,tSales:0,bills:0,tBills:0,walk:0,tWalk:0,qty:0,wConv:0,wABV:0,wUPT:0,wW:0,has:false};
+    fStores.forEach(function(s){
+      ms.forEach(function(m){
+        var d=s.monthlyData&&s.monthlyData[m];if(!d)return;
+        b.has=true;
+        b.sales+=d.sales||0;   b.tSales+=d.target||0;
+        b.bills+=d.bills||0;   b.tBills+=d.tBills||0;
+        b.walk +=d.walkIns||0; b.tWalk +=d.tWalkIns||0;
+        b.qty  +=d.qty||0;
+        var w=d.target||0;b.wW+=w;
+        b.wConv+=(d.tConv||0)*w;b.wABV+=(d.tABV||0)*w;b.wUPT+=(d.tUPT||0)*w;
+      });
+    });
+    return b;
+  }
+  var N0=function(n){return Math.round(n).toLocaleString('en-IN');};
+  var P1=function(n){return n.toFixed(1)+'%';};
+  var U2=function(n){return n.toFixed(2);};
+  var ROWS=[
+    {k:'Sales',        t:function(b){return b.tSales;},                 a:function(b){return b.sales;},                        f:L },
+    {k:'Walk-ins',     t:function(b){return b.tWalk;},                  a:function(b){return b.walk;},                         f:N0},
+    {k:'Bills',        t:function(b){return b.tBills;},                 a:function(b){return b.bills;},                        f:N0},
+    {k:'Conversion %', t:function(b){return b.wW?b.wConv/b.wW:0;},      a:function(b){return b.walk?b.bills/b.walk*100:0;},    f:P1},
+    {k:'ABV',          t:function(b){return b.wW?b.wABV/b.wW:0;},       a:function(b){return b.bills?b.sales/b.bills:0;},      f:L },
+    {k:'UPT',          t:function(b){return b.wW?b.wUPT/b.wW:0;},       a:function(b){return b.bills?b.qty/b.bills:0;},        f:U2}
+  ];
+  var cols=dispMonths.map(function(m){return{label:m,b:bucket([m]),tot:false};});
+  cols.push({label:'TOTAL',b:bucket(dispMonths),tot:true});
+
+  var TH='padding:6px 8px;border-bottom:2px solid var(--border);font-size:10px;color:var(--text2);text-transform:uppercase;text-align:center;';
+  var TD='padding:6px 8px;border-bottom:1px solid var(--border);text-align:right;font-family:monospace;font-size:11px;';
+  var head1='<tr style="background:var(--surface2);">'+
+    '<th rowspan="2" style="'+TH+'text-align:left;position:sticky;left:0;background:var(--surface2);min-width:110px;">KPI</th>'+
+    cols.map(function(c){
+      return'<th colspan="3" style="'+TH+'border-left:2px solid var(--border);'+(c.tot?'color:var(--primary);background:var(--primary-bg);':'')+'">'+c.label+'</th>';
+    }).join('')+'</tr>';
+  var head2='<tr style="background:var(--surface2);">'+cols.map(function(c){
+    var b=c.tot?'background:var(--primary-bg);':'';
+    return'<th style="'+TH+'border-left:2px solid var(--border);'+b+'">Target</th>'+
+           '<th style="'+TH+b+'">Ach</th>'+
+           '<th style="'+TH+b+'">Ach%</th>';
+  }).join('')+'</tr>';
+
+  var body=ROWS.map(function(r){
+    return'<tr>'+
+      '<td style="padding:6px 8px;border-bottom:1px solid var(--border);font-weight:700;color:var(--primary);position:sticky;left:0;background:var(--surface);">'+r.k+'</td>'+
+      cols.map(function(c){
+        var tv=r.t(c.b),av=r.a(c.b);
+        var pct=tv>0?Math.round(av/tv*100):null;
+        var bg=c.tot?'background:var(--primary-bg);':'';
+        return'<td style="'+TD+'border-left:2px solid var(--border);color:var(--text2);'+bg+'">'+(tv?r.f(tv):'—')+'</td>'+
+               '<td style="'+TD+'font-weight:700;'+bg+'">'+(av?r.f(av):'—')+'</td>'+
+               '<td class="'+(pct===null?'':pc(pct))+'" style="'+TD+'font-weight:700;'+bg+'">'+(pct===null?'—':pct+'%')+'</td>';
+      }).join('')+
+    '</tr>';
+  }).join('');
+
+  // Warn when the deployed Apps Script predates ytdVersion 2, or a month failed to parse
+  var notes=[];
+  if(!perMonthKPI)notes.push('Walk-ins, Bills, Conversion % and UPT need the updated Apps Script (getYTD ytdVersion 2). Re-paste Script.js into the Apps Script editor and redeploy — Sales and ABV work either way.');
+  if(monthsLoaded&&monthsLoaded.length){
+    var missing=dispMonths.filter(function(m){return monthsLoaded.indexOf(m)<0;});
+    if(missing.length)notes.push('No data returned for '+missing.join(', ')+' — those months are excluded from the target, so Ach% covers only '+monthsLoaded.filter(function(m){return dispMonths.indexOf(m)>=0;}).join(', ')+'.');
+  }
+  var noteHtml=notes.map(function(n){
+    return'<div style="padding:7px 10px;margin-bottom:8px;border-radius:6px;font-size:11px;background:rgba(245,158,11,.12);color:var(--amber,#b45309);border:1px solid rgba(245,158,11,.35);">&#9888; '+n+'</div>';
+  }).join('');
+
+  mWrap.innerHTML=noteHtml+'<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">'+
+    '<thead>'+head1+head2+'</thead><tbody>'+body+'</tbody></table></div>';
 }
 
 // ═══════════════════════════════════════════
