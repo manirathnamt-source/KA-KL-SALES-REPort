@@ -1168,6 +1168,7 @@ function buildFilters(sheets){
   selStores=selStores.filter(function(c){return live[c];});
   renderStorePicker();
   renderMonthPicker(sheets);
+  syncYTDUpTo(sheets);
 }
 // Store filter: no selection = all stores
 function storeOK(s){return !selStores.length||selStores.indexOf(s.code)>=0;}
@@ -2981,13 +2982,39 @@ function setYTDInfo(msg,type){
   el.textContent=msg;
 }
 
+// Last month of a quarter that actually has a sheet — so picking Q3 in August
+// doesn't send getYTD off to read months that don't exist yet.
+function ytdQtrEnd(qtr){
+  var want=QTR_MONTHS[qtr]||[];
+  var have=(window._lastSheets&&window._lastSheets.length)?window._lastSheets:ALL_MONTHS;
+  var ok=want.filter(function(m){return have.indexOf(m)>=0;});
+  return ok.length?ok[ok.length-1]:null;
+}
 function filterYTD(qtr){
   if(!ytdLoaded){setYTDInfo('Click ▶ Load YTD first','wrn');return;}
   ytdQtrFilter=qtr;
   document.querySelectorAll('.ytd-qbtn').forEach(function(b){
     b.classList.toggle('active',b.getAttribute('data-q')===(qtr||''));
   });
+  // The chip only filters months already fetched. If the quarter runs past the loaded
+  // range, fetch the rest first — otherwise "Q1 Apr–Jun" silently showed just APR.
+  var end=qtr?ytdQtrEnd(qtr):null;
+  if(end&&((ytdData&&ytdData.months)||[]).indexOf(end)<0){
+    var sel=document.getElementById('ytd-upto');
+    if(sel)sel.value=end;
+    loadYTD();
+    return;
+  }
   renderYTD();
+}
+// Default the "Up to" selector to the newest month with a sheet, so the first
+// Load YTD covers the year so far rather than APR alone.
+function syncYTDUpTo(sheets){
+  if(ytdLoaded)return;
+  var sel=document.getElementById('ytd-upto');if(!sel)return;
+  var have=(sheets||[]).filter(function(m){return ALL_MONTHS.indexOf(m)>=0;})
+    .sort(function(a,b){return ALL_MONTHS.indexOf(a)-ALL_MONTHS.indexOf(b);});
+  if(have.length)sel.value=have[have.length-1];
 }
 
 function renderYTD(){
