@@ -1192,6 +1192,8 @@ function applyFilter(){
   renderAll();
   // Sync category tab if loaded
   if(catData) renderCat();
+  // The top-bar Quarter dropdown drives the YTD tab (the monthly tabs ignore it)
+  if(ytdLoaded&&qtr!==ytdQtrFilter)filterYTD(qtr);
 }
 function resetFilter(){['sel-rm','sel-cm','sel-city','sel-market','sel-type','sel-qtr','dt-from','dt-to'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});selStores=[];renderStorePicker('');dateFrom=null;dateTo=null;applyFilter();}
 
@@ -1203,6 +1205,7 @@ function renderAll(){
   renderSummary();
   renderStores();renderDaywise();renderMTD();renderWK(activeWK);
   renderL2L();renderLossReason();renderKPIAlerts();renderAudit();
+  if(ytdLoaded)renderYTD();   // YTD honours the main filter bar too, so keep it in step
 }
 
 // ═══════════════════════════════════════════
@@ -2996,6 +2999,10 @@ function filterYTD(qtr){
   document.querySelectorAll('.ytd-qbtn').forEach(function(b){
     b.classList.toggle('active',b.getAttribute('data-q')===(qtr||''));
   });
+  // Keep the top-bar Quarter dropdown showing the same thing (setting .value
+  // programmatically doesn't fire its onchange, so this can't loop back here)
+  var qs=document.getElementById('sel-qtr');
+  if(qs&&qs.value!==(qtr||''))qs.value=qtr||'';
   // The chip only filters months already fetched. If the quarter runs past the loaded
   // range, fetch the rest first — otherwise "Q1 Apr–Jun" silently showed just APR.
   var end=qtr?ytdQtrEnd(qtr):null;
@@ -3044,11 +3051,25 @@ function renderYTD(){
   var months=(ytdData.months||[]);
   var upToMonth=ytdData.upToMonth||months[months.length-1]||'APR';
 
-  // RM/CM filter from main filters
+  // Apply the whole main filter bar, not just RM/CM. The YTD payload only carries
+  // code/name/rm/cm, so City, Market and Type are resolved by joining each YTD store
+  // back to the month data already loaded in `raw` / monthCache.
   var rm=(document.getElementById('sel-rm')||{}).value||'';
   var cm=(document.getElementById('sel-cm')||{}).value||'';
+  var cy=(document.getElementById('sel-city')||{}).value||'';
+  var mk=(document.getElementById('sel-market')||{}).value||'';
+  var ty=(document.getElementById('sel-type')||{}).value||'';
+  var meta={};
+  [raw].concat(Object.keys(monthCache).map(function(k){return monthCache[k];}))
+    .forEach(function(arr){(arr||[]).forEach(function(s){if(s.code&&!meta[s.code])meta[s.code]=s;});});
   var fStores=stores.filter(function(s){
-    return(!rm||s.rm===rm)&&(!cm||s.cm===cm);
+    if(rm&&s.rm!==rm)return false;
+    if(cm&&s.cm!==cm)return false;
+    if(!storeOK(s))return false;                 // Store multi-select, matched on code
+    if(!cy&&!mk&&!ty)return true;
+    var m=meta[s.code];
+    if(!m)return false;                          // can't place it — leave it out rather than guess
+    return(!cy||m.city===cy)&&(!mk||mkt(m)===mk)&&(!ty||styp(m)===ty);
   });
 
   // Quarter filter
