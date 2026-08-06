@@ -327,6 +327,7 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
 <div class="tab warn" onclick="showTab('kpialerts',this)">&#9888; KPI Alerts</div>
   <div class="tab danger" onclick="showTab('audit',this)">&#128270; Audit</div>
   <div class="tab" onclick="showTab('category',this)">&#128142; Category</div>
+  <div class="tab" onclick="showTab('visits',this)">&#128694; Store Visits</div>
 </div>
 
 <!-- CONTENT -->
@@ -518,6 +519,37 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
     <th class="r" onclick="srt('t-ytd-store',8)">UPT</th>
   </tr></thead><tbody id="b-ytd-store"></tbody></table></div>
 
+</div>
+
+<!-- STORE VISITS — RM & CM visit plan for a chosen date, from the RM Visit Tracker sheet -->
+<div class="panel" id="panel-visits">
+  <div class="sh">
+    <span class="sh-t" id="vis-title">&#128694; Store Visit Plan</span>
+    <div class="sh-l"></div>
+    <label style="font-size:11px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Date</label>
+    <input type="date" id="vis-date" onchange="loadVisits()" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:inherit;">
+    <button class="dl" onclick="visShift(-1)">&#8592; Prev</button>
+    <button class="dl" onclick="visToday()">Today</button>
+    <button class="dl" onclick="visShift(1)">Next &#8594;</button>
+    <button class="dl" onclick="loadVisits()" id="vis-load-btn">&#9654; Load</button>
+    <button class="dl" onclick="dlT('t-vis','Store_Visits')">&#8595; CSV</button>
+  </div>
+  <div id="vis-ibar" style="display:none;padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:10px;"></div>
+  <div class="krow" id="vis-kpis"></div>
+  <div style="display:flex;gap:6px;margin:10px 0;flex-wrap:wrap;align-items:center;">
+    <span style="font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Role:</span>
+    <button data-r="" class="wkbtn vis-rbtn active" onclick="setVisRole('')">All</button>
+    <button data-r="RM" class="wkbtn vis-rbtn" onclick="setVisRole('RM')">RM only</button>
+    <button data-r="CM" class="wkbtn vis-rbtn" onclick="setVisRole('CM')">CM only</button>
+  </div>
+  <div class="tw"><table id="t-vis"><thead><tr>
+    <th onclick="srt('t-vis',0)">Role</th>
+    <th onclick="srt('t-vis',1)">Name</th>
+    <th onclick="srt('t-vis',2)">Store</th>
+    <th onclick="srt('t-vis',3)">Visit Type</th>
+    <th onclick="srt('t-vis',4)">Counterpart</th>
+    <th onclick="srt('t-vis',5)">Status</th>
+  </tr></thead><tbody id="b-vis"></tbody></table></div>
 </div>
 
 <!-- KPI ALERTS -->
@@ -3370,6 +3402,88 @@ function renderYTDKpiMatrix(fStores,dispMonths,perMonthKPI,monthsLoaded){
 }
 
 // ═══════════════════════════════════════════
+// STORE VISITS — RM & CM plan for one date
+// ═══════════════════════════════════════════
+var visData=null, visRole='';
+function setVisInfo(msg,cls){
+  var el=document.getElementById('vis-ibar');if(!el)return;
+  el.style.display=msg?'block':'none';el.textContent=msg||'';
+  var c={ok:['var(--green-bg)','var(--green)'],err:['var(--red-bg)','var(--red)'],
+          wrn:['var(--amber-bg)','var(--amber)'],inf:['var(--primary-bg)','var(--primary)']}[cls||'inf'];
+  el.style.background=c[0];el.style.color=c[1];
+}
+function todayISO(){var d=new Date();return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
+function visToday(){var el=document.getElementById('vis-date');if(el){el.value=todayISO();loadVisits();}}
+function visShift(n){
+  var el=document.getElementById('vis-date');if(!el)return;
+  var d=el.value?new Date(el.value+'T00:00:00'):new Date();
+  d.setDate(d.getDate()+n);
+  el.value=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+  loadVisits();
+}
+function setVisRole(r){
+  visRole=r;
+  document.querySelectorAll('.vis-rbtn').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-r')===r);});
+  renderVisits();
+}
+function loadVisits(){
+  if(!activeURL){setVisInfo('Connect the dashboard first — paste the Apps Script URL in the top bar','wrn');return;}
+  var el=document.getElementById('vis-date');
+  if(el&&!el.value)el.value=todayISO();
+  var d=el?el.value:todayISO();
+  var btn=document.getElementById('vis-load-btn');
+  btn.textContent='...';btn.disabled=true;
+  setVisInfo('Loading visit plan for '+d+'…','inf');
+  jfetch(activeURL,null,'visits',{date:d})
+    .then(function(r){
+      btn.textContent='▶ Load';btn.disabled=false;
+      if(!r){setVisInfo('❌ No response from server','err');return;}
+      if(r.error){setVisInfo('❌ '+r.error,'err');return;}
+      visData=r;
+      if(!r.rows.length)setVisInfo('No visit plan recorded for '+d,'wrn');
+      else setVisInfo('✅ '+d+' · '+r.visitCount+' visits · '+r.peopleOut+' people out · '+r.storeCount+' stores','ok');
+      renderVisits();
+    })
+    .catch(function(e){
+      btn.textContent='▶ Load';btn.disabled=false;
+      // An old deployment has no 'visits' action and falls through to getMonthly
+      setVisInfo('❌ '+e.message+' — if this says the sheet is missing, redeploy the Apps Script (it needs the getVisits action)','err');
+    });
+}
+function renderVisits(){
+  var body=document.getElementById('b-vis');if(!body)return;
+  var t=document.getElementById('vis-title');
+  if(!visData){body.innerHTML=nd(6,'Pick a date and click ▶ Load');document.getElementById('vis-kpis').innerHTML='';return;}
+  var rows=visData.rows.filter(function(r){return !visRole||r.role===visRole;});
+  if(t)t.textContent='🚶 Store Visit Plan — '+visData.date;
+  var rmS={},cmS={},stS={};
+  rows.forEach(function(r){
+    if(!r.isVisit)return;
+    if(r.role==='RM')rmS[r.person]=1; else if(r.role==='CM')cmS[r.person]=1;
+    if(r.store)stS[r.store.toUpperCase()]=1;
+  });
+  document.getElementById('vis-kpis').innerHTML=[
+    {l:'Date',v:visData.date,s:visRole?visRole+' only':'all roles'},
+    {l:'Planned Visits',v:rows.filter(function(r){return r.isVisit;}).length,s:'store visits'},
+    {l:'RMs Out',v:Object.keys(rmS).length,s:'on field'},
+    {l:'CMs Out',v:Object.keys(cmS).length,s:'on field'},
+    {l:'Stores Covered',v:Object.keys(stS).length,s:'unique'},
+    {l:'Non-visit',v:rows.filter(function(r){return !r.isVisit;}).length,s:'leave/off/office'}
+  ].map(function(c){return'<div class="kc"><div class="kl">'+c.l+'</div><div class="kv">'+c.v+'</div><div class="ks">'+c.s+'</div></div>';}).join('');
+  body.innerHTML=rows.map(function(r){
+    var rc=r.role==='RM'?'var(--primary)':r.role==='CM'?'var(--purple)':'var(--text3)';
+    var tc=r.isVisit?'var(--green)':'var(--text3)';
+    return'<tr>'+
+      '<td style="font-weight:700;color:'+rc+';">'+hesc(r.role)+'</td>'+
+      '<td style="font-weight:600;">'+hesc(r.person)+'</td>'+
+      '<td>'+hesc(r.store||'—')+'</td>'+
+      '<td style="color:'+tc+';font-weight:600;">'+hesc(r.typeLabel)+'</td>'+
+      '<td style="font-size:11px;color:var(--text2);">'+hesc(r.counterpart||'—')+'</td>'+
+      '<td style="font-size:11px;color:var(--text2);">'+hesc(r.status||'—')+'</td></tr>';
+  }).join('')||nd(6,'No visit plan for this date'+(visRole?' ('+visRole+' only)':''));
+}
+
+// ═══════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════
 window.addEventListener('load',function(){
@@ -3384,6 +3498,7 @@ window.addEventListener('load',function(){
   var catInp=document.getElementById('cat-url');
   if(urlInp&&savedURL)urlInp.value=savedURL;
   renderMonthPicker([]);
+  var vd=document.getElementById('vis-date');if(vd&&!vd.value)vd.value=todayISO();
   // Load last-FY (2025-26) data for the L2L tab (static historical file)
   fetch('l2l_map.json').then(function(r){return r.ok?r.json():null;}).then(function(d){if(d){L2L_DATA=d;renderL2L();}}).catch(function(){});
   // Load lost-sale incident data for the Loss of Sale tab

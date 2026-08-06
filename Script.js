@@ -42,6 +42,8 @@ function doGet(e) {
   try {
     if (p.action === 'ytd') {
       result = getYTD(p.upToMonth);
+    } else if (p.action === 'visits') {
+      result = getVisits(p.date);
     } else {
       result = getMonthly(p.sheet || 'APR');
     }
@@ -376,6 +378,115 @@ function getYTD(upToMonth) {
     upToMonth:    upToMonth,
     quarter:      QTR_MAP[upToMonth] || 'Q1',
     generatedAt:  new Date().toISOString()
+  };
+}
+
+// ════════════════════════════════════════
+// STORE VISITS — read the RM Visit Tracker's sheet directly.
+// That tracker is an HtmlService app (its doGet returns a page, not JSON), so
+// there is no endpoint to call. Reading its sheet from here keeps the tracker
+// untouched and means only THIS script ever needs redeploying.
+// ════════════════════════════════════════
+var VISIT_SHEET_ID = '1FQ1slvNeW-8N09miSWC5d4e8ymFcM-jGbMPOmWnio9g';
+var VISIT_TYPES_MAP = {
+  R:  { label: 'Routine',      isVisit: true  },
+  A:  { label: 'Audit',        isVisit: true  },
+  CM: { label: 'CM Accompany', isVisit: true  },
+  E:  { label: 'Escalation',   isVisit: true  },
+  O:  { label: 'Outstation',   isVisit: true  },
+  S:  { label: 'Strategic',    isVisit: true  },
+  H:  { label: 'Holiday',      isVisit: false },
+  OFC:{ label: 'Office',       isVisit: false },
+  L:  { label: 'Leave',        isVisit: false },
+  WO: { label: 'Week Off',     isVisit: false }
+};
+
+// Planned Date is written as a 'YYYY-MM-DD' string but Sheets may coerce it to a
+// Date, so normalise both to 'YYYY-MM-DD' in the sheet's own timezone.
+function visitDateKey(v, tz) {
+  if (v instanceof Date) return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+  var s = String(v || '').trim();
+  var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? '' : Utilities.formatDate(d, tz, 'yyyy-MM-dd');
+}
+
+function getVisits(dateStr) {
+  dateStr = String(dateStr || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return { error: 'Bad date "' + dateStr + '" — expected YYYY-MM-DD' };
+
+  var ss;
+  try { ss = SpreadsheetApp.openById(VISIT_SHEET_ID); }
+  catch (err) { return { error: 'Cannot open the visit-plan sheet — make sure this script\'s account has access. ' + err }; }
+  var tz = ss.getSpreadsheetTimeZone() || 'Asia/Kolkata';
+
+  // Store Mapping: Store Name | RM Name | CM Name — tells us who is an RM vs a CM,
+  // and who the counterpart is for each store.
+  var isRM = {}, isCM = {}, storeRM = {}, storeCM = {};
+  var mapSh = ss.getSheetByName('Store Mapping');
+  if (mapSh && mapSh.getLastRow() > 1) {
+    var mv = mapSh.getRange(2, 1, mapSh.getLastRow() - 1, 3).getValues();
+    for (var i = 0; i < mv.length; i++) {
+      var st = String(mv[i][0] || '').trim(),
+          rm = String(mv[i][1] || '').trim(),
+          cm = String(mv[i][2] || '').trim();
+      if (rm) isRM[rm.toUpperCase()] = rm;
+      if (cm) isCM[cm.toUpperCase()] = cm;
+      if (st && rm) storeRM[st.toUpperCase()] = rm;
+      if (st && cm) storeCM[st.toUpperCase()] = cm;
+    }
+  }
+
+  // Visit Plan: RM Name | Month | Store Name | Planned Date | Visit Type | Status | Submitted On
+  var rows = [];
+  var planSh = ss.getSheetByName('Visit Plan');
+  if (planSh && planSh.getLastRow() > 1) {
+    var pv = planSh.getRange(2, 1, planSh.getLastRow() - 1, 7).getValues();
+    for (var r = 0; r < pv.length; r++) {
+      if (visitDateKey(pv[r][3], tz) !== dateStr) continue;
+      var who   = String(pv[r][0] || '').trim();
+      var store = String(pv[r][2] || '').trim();
+      var vt    = String(pv[r][4] || '').trim().toUpperCase();
+      var cfg   = VISIT_TYPES_MAP[vt] || { label: vt || '—', isVisit: false };
+      var key   = who.toUpperCase();
+      // A name can appear in both columns; Visit Plan rows are owned by whoever
+      // submitted, so prefer the RM reading and fall back to CM.
+      var role  = isRM[key] ? 'RM' : (isCM[key] ? 'CM' : '—');
+      rows.push({
+        person:      who,
+        role:        role,
+        store:       store,
+        type:        vt,
+        typeLabel:   cfg.label,
+        isVisit:     !!cfg.isVisit,
+        status:      String(pv[r][5] || '').trim(),
+        counterpart: role === 'RM' ? (storeCM[store.toUpperCase()] || '')
+                                   : (storeRM[store.toUpperCase()] || '')
+      });
+    }
+  }
+
+  rows.sort(function(a, b) {
+    if (a.role !== b.role) return a.role === 'RM' ? -1 : 1;
+    if (a.person !== b.person) return a.person < b.person ? -1 : 1;
+    return a.store < b.store ? -1 : 1;
+  });
+
+  var stores = {}, people = {};
+  for (var k = 0; k < rows.length; k++) {
+    if (rows[k].isVisit && rows[k].store) stores[rows[k].store.toUpperCase()] = 1;
+    if (rows[k].isVisit) people[rows[k].person.toUpperCase()] = 1;
+  }
+
+  return {
+    date:        dateStr,
+    rows:        rows,
+    totalRows:   rows.length,
+    visitCount:  rows.filter(function(x) { return x.isVisit; }).length,
+    storeCount:  Object.keys(stores).length,
+    peopleOut:   Object.keys(people).length,
+    generatedAt: new Date().toISOString()
   };
 }
 
