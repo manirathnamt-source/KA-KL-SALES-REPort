@@ -257,6 +257,15 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
 .mm>summary::after{content:'\25BC';position:absolute;right:7px;top:50%;transform:translateY(-50%);font-size:8px;opacity:.6;}
 .mm[open]>summary{border-color:#3b82f6;}
 .mm-pop{position:absolute;z-index:50;top:calc(100% + 4px);left:0;background:var(--card,#fff);border:1px solid var(--border,#d1d5db);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:6px;min-width:170px;max-height:280px;overflow:auto;}
+/* YTD chart — Target is de-emphasis context, Achievement is the accent.
+   Both pairs validated for CVD + normal-vision separation on their own surface. */
+.ytdc{--tgt:#a8b4c4;--ach:#2a78d6;margin-bottom:14px;}
+[data-theme="dark"] .ytdc{--tgt:#a3b0c2;--ach:#3987e5;}
+.ytdc svg{display:block;width:100%;height:auto;}
+.ytdc-lg{display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--text2);margin-bottom:6px;}
+.ytdc-lg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;}
+.ytdc rect.hit{fill:transparent;cursor:pointer;}
+.ytdc rect.hit:hover{fill:var(--primary);opacity:.07;}
 .mm-pop-store{min-width:270px;max-width:320px;max-height:340px;}
 .mm-search{width:100%;box-sizing:border-box;font-size:12px;padding:4px 7px;margin-bottom:5px;border:1px solid var(--border,#d1d5db);border-radius:5px;background:var(--card,#fff);color:inherit;}
 .mm-list{max-height:220px;overflow:auto;}
@@ -459,6 +468,20 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
     <button data-q="Q4" class="wkbtn ytd-qbtn" onclick="filterYTD('Q4')">Q4 Jan–Mar</button>
   </div>
 
+  <!-- Month-wise target vs achievement — chart + table, all months at once -->
+  <div class="sh"><span class="sh-t">Month-wise KPI &mdash; Target vs Achievement</span><div class="sh-l"></div></div>
+  <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center;">
+    <span style="font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Chart:</span>
+    <button data-k="Sales" class="wkbtn ytd-kbtn active" onclick="setYTDChartKPI('Sales')">Sales</button>
+    <button data-k="Walk-ins" class="wkbtn ytd-kbtn" onclick="setYTDChartKPI('Walk-ins')">Walk-ins</button>
+    <button data-k="Bills" class="wkbtn ytd-kbtn" onclick="setYTDChartKPI('Bills')">Bills</button>
+    <button data-k="Conversion %" class="wkbtn ytd-kbtn" onclick="setYTDChartKPI('Conversion %')">Conversion %</button>
+    <button data-k="ABV" class="wkbtn ytd-kbtn" onclick="setYTDChartKPI('ABV')">ABV</button>
+    <button data-k="UPT" class="wkbtn ytd-kbtn" onclick="setYTDChartKPI('UPT')">UPT</button>
+  </div>
+  <div id="ytd-chart-wrap" class="ytdc"></div>
+  <div id="ytd-monthly-wrap" class="tw"></div>
+
   <div class="sh"><span class="sh-t">RM — YTD Performance</span><div class="sh-l"></div></div>
   <div class="tw"><table id="t-ytd-rm"><thead><tr>
     <th onclick="srt('t-ytd-rm',0)">RM</th>
@@ -495,9 +518,6 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
     <th class="r" onclick="srt('t-ytd-store',8)">UPT</th>
   </tr></thead><tbody id="b-ytd-store"></tbody></table></div>
 
-  <!-- Month-wise KPI target vs achievement -->
-  <div class="sh"><span class="sh-t">Month-wise KPI &mdash; Target vs Achievement</span><div class="sh-l"></div></div>
-  <div id="ytd-monthly-wrap" class="tw"></div>
 </div>
 
 <!-- KPI ALERTS -->
@@ -2941,6 +2961,83 @@ function shareWA(){
 // YTD
 // ═══════════════════════════════════════════
 var ytdData=null, ytdQtrFilter='', ytdLoaded=false;
+var ytdChartKPI='Sales', _ytdCols=null;
+// The six KPIs shared by the month-wise table and the chart. Ratio targets
+// (conv/ABV/UPT) are weighted by store sales target inside bucket().
+var _N0=function(n){return Math.round(n).toLocaleString('en-IN');};
+var _P1=function(n){return n.toFixed(1)+'%';};
+var _U2=function(n){return n.toFixed(2);};
+var YTD_KPIS=[
+  {k:'Sales',        t:function(b){return b.tSales;},            a:function(b){return b.sales;},                     f:L  },
+  {k:'Walk-ins',     t:function(b){return b.tWalk;},             a:function(b){return b.walk;},                      f:_N0},
+  {k:'Bills',        t:function(b){return b.tBills;},            a:function(b){return b.bills;},                     f:_N0},
+  {k:'Conversion %', t:function(b){return b.wW?b.wConv/b.wW:0;}, a:function(b){return b.walk?b.bills/b.walk*100:0;}, f:_P1},
+  {k:'ABV',          t:function(b){return b.wW?b.wABV/b.wW:0;},  a:function(b){return b.bills?b.sales/b.bills:0;},   f:L  },
+  {k:'UPT',          t:function(b){return b.wW?b.wUPT/b.wW:0;},  a:function(b){return b.bills?b.qty/b.bills:0;},     f:_U2}
+];
+function setYTDChartKPI(k){
+  ytdChartKPI=k;
+  document.querySelectorAll('.ytd-kbtn').forEach(function(b){
+    b.classList.toggle('active',b.getAttribute('data-k')===k);
+  });
+  drawYTDChart();
+}
+// Grouped columns per month: Target as recessive context, Achievement as the accent.
+// Ach% rides above each pair as a status-coloured label, so identity is never colour-alone.
+function drawYTDChart(){
+  var wrap=document.getElementById('ytd-chart-wrap');if(!wrap)return;
+  var spec=YTD_KPIS.filter(function(r){return r.k===ytdChartKPI;})[0]||YTD_KPIS[0];
+  var cols=(_ytdCols||[]).filter(function(c){return !c.tot;});   // TOTAL is a different scale
+  if(!cols.length){wrap.innerHTML='';return;}
+  var pts=cols.map(function(c){return{m:c.label,t:spec.t(c.b),a:spec.a(c.b)};});
+  var max=0;pts.forEach(function(p){max=Math.max(max,p.t||0,p.a||0);});
+  if(!(max>0)){
+    wrap.innerHTML='<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px;">No '+ytdChartKPI+' data — needs the updated Apps Script</div>';
+    return;
+  }
+  // round the axis up to a clean number
+  var mag=Math.pow(10,Math.floor(Math.log(max)/Math.LN10)),step=mag/2;
+  while(Math.ceil(max/step)>8)step*=2;
+  var top=Math.ceil(max/step)*step, ticks=Math.round(top/step);
+  var W=920,H=300,padL=70,padR=14,padT=30,padB=38;
+  var plotW=W-padL-padR, plotH=H-padT-padB, baseY=padT+plotH;
+  var band=plotW/pts.length, barW=Math.min(22,Math.max(6,band*0.30)), gap=2;
+  var y=function(v){return baseY-(v/top)*plotH;};
+  var esc=hesc, s=[];
+  // gridlines + y ticks
+  for(var i=0;i<=ticks;i++){
+    var gv=top*i/ticks, gy=y(gv);
+    s.push('<line x1="'+padL+'" y1="'+gy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+gy.toFixed(1)+'" stroke="var(--border)" stroke-width="1"/>');
+    s.push('<text x="'+(padL-8)+'" y="'+(gy+3.5).toFixed(1)+'" text-anchor="end" font-size="10" fill="var(--text3)">'+esc(spec.f(gv))+'</text>');
+  }
+  function bar(x,v,fill){
+    var h=baseY-y(v);if(h<=0)return'';
+    var r=Math.min(4,barW/2,h);
+    var ty=y(v);
+    return'<path d="M'+x+' '+baseY+' L'+x+' '+(ty+r)+' Q'+x+' '+ty+' '+(x+r)+' '+ty+
+      ' L'+(x+barW-r)+' '+ty+' Q'+(x+barW)+' '+ty+' '+(x+barW)+' '+(ty+r)+' L'+(x+barW)+' '+baseY+' Z" fill="'+fill+'"/>';
+  }
+  pts.forEach(function(p,i){
+    var cx=padL+band*i+band/2, x1=cx-barW-gap/2, x2=cx+gap/2;
+    s.push(bar(x1,p.t,'var(--tgt)'));
+    s.push(bar(x2,p.a,'var(--ach)'));
+    var pct=p.t>0?Math.round(p.a/p.t*100):null;
+    if(pct!==null){
+      var lc=pct>=100?'var(--green)':pct>=85?'var(--amber)':'var(--red)';
+      var ly=Math.min(y(p.t),y(p.a))-7;
+      s.push('<text x="'+cx.toFixed(1)+'" y="'+Math.max(padT-4,ly).toFixed(1)+'" text-anchor="middle" font-size="11" font-weight="700" fill="'+lc+'">'+pct+'%</text>');
+    }
+    s.push('<text x="'+cx.toFixed(1)+'" y="'+(baseY+16)+'" text-anchor="middle" font-size="11" fill="var(--text2)">'+esc(p.m)+'</text>');
+    s.push('<rect class="hit" x="'+(padL+band*i).toFixed(1)+'" y="'+padT+'" width="'+band.toFixed(1)+'" height="'+plotH+'">'+
+      '<title>'+esc(p.m)+'\nTarget: '+esc(spec.f(p.t))+'\nAchieved: '+esc(spec.f(p.a))+
+      (pct!==null?'\nAch: '+pct+'%':'')+'</title></rect>');
+  });
+  s.push('<line x1="'+padL+'" y1="'+baseY+'" x2="'+(W-padR)+'" y2="'+baseY+'" stroke="var(--border2)" stroke-width="1"/>');
+  wrap.innerHTML='<div class="ytdc-lg"><span><i style="background:var(--tgt)"></i>Target</span>'+
+    '<span><i style="background:var(--ach)"></i>Achieved</span>'+
+    '<span style="color:var(--text3);">'+esc(ytdChartKPI)+' &middot; % above each pair is achievement vs target</span></div>'+
+    '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(ytdChartKPI)+' target versus achievement by month">'+s.join('')+'</svg>';
+}
 var QTR_MONTHS={Q1:['APR','MAY','JUN'],Q2:['JUL','AUG','SEP'],Q3:['OCT','NOV','DEC'],Q4:['JAN','FEB','MAR']};
 
 function loadYTD(){
@@ -3202,6 +3299,7 @@ function renderYTDKpiMatrix(fStores,dispMonths,perMonthKPI,monthsLoaded){
   if(!mWrap)return;
   if(!dispMonths.length){
     mWrap.innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);">No month data for selected quarter</div>';
+    _ytdCols=null;drawYTDChart();
     return;
   }
   // Roll every filtered store up per month. Ratio targets (conv/ABV/UPT) are averaged
@@ -3222,19 +3320,10 @@ function renderYTDKpiMatrix(fStores,dispMonths,perMonthKPI,monthsLoaded){
     });
     return b;
   }
-  var N0=function(n){return Math.round(n).toLocaleString('en-IN');};
-  var P1=function(n){return n.toFixed(1)+'%';};
-  var U2=function(n){return n.toFixed(2);};
-  var ROWS=[
-    {k:'Sales',        t:function(b){return b.tSales;},                 a:function(b){return b.sales;},                        f:L },
-    {k:'Walk-ins',     t:function(b){return b.tWalk;},                  a:function(b){return b.walk;},                         f:N0},
-    {k:'Bills',        t:function(b){return b.tBills;},                 a:function(b){return b.bills;},                        f:N0},
-    {k:'Conversion %', t:function(b){return b.wW?b.wConv/b.wW:0;},      a:function(b){return b.walk?b.bills/b.walk*100:0;},    f:P1},
-    {k:'ABV',          t:function(b){return b.wW?b.wABV/b.wW:0;},       a:function(b){return b.bills?b.sales/b.bills:0;},      f:L },
-    {k:'UPT',          t:function(b){return b.wW?b.wUPT/b.wW:0;},       a:function(b){return b.bills?b.qty/b.bills:0;},        f:U2}
-  ];
+  var ROWS=YTD_KPIS;
   var cols=dispMonths.map(function(m){return{label:m,b:bucket([m]),tot:false};});
   cols.push({label:'TOTAL',b:bucket(dispMonths),tot:true});
+  _ytdCols=cols;
 
   var TH='padding:6px 8px;border-bottom:2px solid var(--border);font-size:10px;color:var(--text2);text-transform:uppercase;text-align:center;';
   var TD='padding:6px 8px;border-bottom:1px solid var(--border);text-align:right;font-family:monospace;font-size:11px;';
@@ -3277,6 +3366,7 @@ function renderYTDKpiMatrix(fStores,dispMonths,perMonthKPI,monthsLoaded){
 
   mWrap.innerHTML=noteHtml+'<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">'+
     '<thead>'+head1+head2+'</thead><tbody>'+body+'</tbody></table></div>';
+  drawYTDChart();
 }
 
 // ═══════════════════════════════════════════
