@@ -76,6 +76,8 @@ body {
 .tbtn-grey:hover { background: #475569; }
 .tbtn-green { background: #16a34a; color: #fff; }
 .tbtn-green:hover { background: #15803d; }
+a.tbtn-rm { background: #7c3aed; color: #fff; text-decoration: none; display: inline-flex; align-items: center; }
+a.tbtn-rm:hover { background: #6d28d9; transform: translateY(-1px); box-shadow: 0 4px 12px #7c3aed60; }
 
 /* ═══ THEME TOGGLE ═══ */
 .theme-btn {
@@ -246,6 +248,7 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <button class="tbtn tbtn-blue" onclick="doLoad()" id="load-btn">&#9654; Load</button>
   <button class="tbtn tbtn-grey" onclick="doRefresh()" title="Refresh">&#8635;</button>
   <button class="tbtn tbtn-green" onclick="shareWA()">&#128228; Share</button>
+  <a class="tbtn tbtn-rm" href="https://script.google.com/macros/s/AKfycbwHgm-5P0_IA13DkqvBTAk0aHHAFaatJ0r1Ug4Repbbu00w-iwoCjxyL-NkAEvE6_D3pQ/exec" target="_blank" rel="noopener" title="Open RM Visit Report">&#128203; RM Visits</a>
   <button class="theme-btn" onclick="toggleTheme()" id="theme-btn" title="Toggle dark/light mode">&#9790;</button>
 </div>
 <div class="ibar" id="ibar"></div>
