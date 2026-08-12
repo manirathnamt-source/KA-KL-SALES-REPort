@@ -3429,15 +3429,17 @@ function setVisRole(r){
   document.querySelectorAll('.vis-rbtn').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-r')===r);});
   renderVisits();
 }
+// Store Visit Plan uses its own dedicated web app (separate Apps Script
+// project), so it works regardless of which backend the dashboard loads.
+var VISITS_URL='https://script.google.com/macros/s/AKfycbwBWYhxhTg9FcbajXS9KI30YN-Mb4g5qrxYKqCqr2pF0VQrM8g1kGRgVMrol6AEXslo/exec';
 function loadVisits(){
-  if(!activeURL){setVisInfo('Connect the dashboard first — paste the Apps Script URL in the top bar','wrn');return;}
   var el=document.getElementById('vis-date');
   if(el&&!el.value)el.value=todayISO();
   var d=el?el.value:todayISO();
   var btn=document.getElementById('vis-load-btn');
   btn.textContent='...';btn.disabled=true;
   setVisInfo('Loading visit plan for '+d+'…','inf');
-  jfetch(activeURL,null,'visits',{date:d})
+  jfetch(VISITS_URL,null,'visits',{date:d})
     .then(function(r){
       btn.textContent='▶ Load';btn.disabled=false;
       if(!r){setVisInfo('❌ No response from server','err');return;}
