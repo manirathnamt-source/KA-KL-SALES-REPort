@@ -379,8 +379,8 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
     <button id="dm-conversion" class="wkbtn" onclick="setDayMetric('conversion')">Conv%</button>
     <button id="dm-abv" class="wkbtn" onclick="setDayMetric('abv')">ABV</button>
     <button id="dm-upt" class="wkbtn" onclick="setDayMetric('upt')">UPT</button>
-    <button id="dm-ly" class="wkbtn" onclick="toggleDayLY('sales')" title="Last year's daily sales, same month" style="margin-left:10px;border-color:#f59e0b;">&#128197; LY Sales</button>
-    <button id="dm-wly" class="wkbtn" onclick="toggleDayLY('walkins')" title="Last year's daily walk-ins, same month" style="border-color:#f59e0b;">&#128694; LY Walk-ins</button>
+    <button id="dm-ly" class="wkbtn" onclick="toggleDayLY('sales')" title="Day-wise this year vs last year sales; respects the FROM/TO dates" style="margin-left:10px;border-color:#f59e0b;">&#128197; Sales vs LY</button>
+    <button id="dm-wly" class="wkbtn" onclick="toggleDayLY('walkins')" title="Day-wise this year vs last year walk-ins; respects the FROM/TO dates" style="border-color:#f59e0b;">&#128694; Walk-ins vs LY</button>
   </div>
   <div class="sh"><span class="sh-t" id="day-title">Day-wise Sales</span><div class="sh-l"></div><button class="dl" onclick="dlT('t-day','Daywise')">&#8595; CSV</button></div>
   <div class="tw"><table id="t-day"><thead id="day-thead"></thead><tbody id="b-day"></tbody></table></div>
@@ -1722,35 +1722,47 @@ function renderDaywise(){
 
 // Day-wise, last-year view: LY daily sales for the same month, per store,
 // with LY vs TY MTD over the same elapsed days and the growth %.
+// TY-vs-LY comparison: each day cell shows this year on top, last year below.
+// Honours the FROM/TO date range; without a range it compares the elapsed days
+// of the month (so a running month isn't judged against LY's full month).
 function renderDaywiseLY(el){
   var isWalk=(DAY_LY==='walkins');
   var lyMap=(isWalk?(WLY_DATA&&WLY_DATA[activeSheet]):(L2L_DATA&&L2L_DATA[activeSheet]))||null;
   var F=isWalk?function(v){return Math.round(v).toLocaleString('en-IN');}:L;
   var tyArrOf=isWalk?function(s){return s.dayWalkIns||null;}:function(s){return s.daySales||[];};
-  document.getElementById('day-title').textContent='Day-wise '+(isWalk?'Walk-ins':'Sales')+' — Last Year FY25-26 ('+activeSheet+')'+(lyMap?'':'  ·  no last-year data for this month');
-  el.innerHTML='<tr><th style="position:sticky;left:0;background:#f9fafb;z-index:2;">Store</th><th style="position:sticky;left:72px;background:#f9fafb;z-index:2;">RM</th>'+
-    labels.map(function(l,i){return'<th class="r" style="min-width:66px;" onclick="srt(\'t-day\','+(i+2)+')">'+l+'</th>';}).join('')+
-    '<th class="r" style="background:#fef3c7;">LY MTD</th><th class="r" style="background:#dbeafe;">TY MTD</th><th class="r">Growth</th></tr>';
-  var colT=labels.map(function(){return 0;}),tLY=0,tTY=0;
+  var N=l2lElapsed();if(!N)N=labels.length;
+  var vis=[];for(var vi=0;vi<labels.length;vi++){if(rangeActive()?dayInRange(activeSheet,vi):(vi<N))vis.push(vi);}
+  document.getElementById('day-title').textContent='Day-wise '+(isWalk?'Walk-ins':'Sales')+' — TY vs LY ('+activeSheet+(rangeActive()?' · '+rangeLabel():'')+')'+(lyMap?'':'  ·  no last-year data for this month');
+  function pair(ty,ly){
+    var c=(ty!=null&&ly!=null&&ly>0)?(ty>=ly?'#16a34a':'#dc2626'):'#111827';
+    return'<div style="font-weight:700;color:'+c+';">'+(ty!=null?F(ty):'—')+'</div><div style="font-size:10px;color:#9ca3af;">'+(ly!=null?F(ly):'—')+'</div>';
+  }
+  el.innerHTML='<tr><th style="position:sticky;left:0;background:#f9fafb;z-index:2;">Store</th><th style="position:sticky;left:72px;background:#f9fafb;z-index:2;">RM<div style="font-size:9px;color:#9ca3af;font-weight:400;">TY over LY</div></th>'+
+    vis.map(function(i,j){return'<th class="r" style="min-width:66px;" onclick="srt(\'t-day\','+(j+2)+')">'+labels[i]+'</th>';}).join('')+
+    '<th class="r" style="background:#dbeafe;">TY Total</th><th class="r" style="background:#fef3c7;">LY Total</th><th class="r">Growth</th></tr>';
+  var colTY=vis.map(function(){return 0;}),colLY=vis.map(function(){return 0;}),tTY=0,tLY=0,anyTY=false;
   document.getElementById('b-day').innerHTML=filtered.map(function(s){
     var lyArr=lyMap?lyMap[(s.code||'').toUpperCase()]:null;
-    var lySum=0;
-    if(lyArr){for(var i=0;i<labels.length;i++){var v0=lyArr[i]||0;lySum+=v0;colT[i]+=v0;}}
-    var tyArr=tyArrOf(s);
-    var tySum=tyArr?tyArr.slice(0,labels.length).reduce(function(a,b){return a+(b||0);},0):null;
-    tLY+=lySum;tTY+=(tySum||0);
-    var g=(lyArr&&lySum>0&&tySum!=null)?Math.round((tySum-lySum)/lySum*100):null;
+    var tyArr=tyArrOf(s);if(tyArr)anyTY=true;
+    var tySum=tyArr?0:null,lySum=lyArr?0:null;
+    var cells=vis.map(function(i,j){
+      var ty=tyArr?(tyArr[i]||0):null,ly=lyArr?(lyArr[i]||0):null;
+      if(ty!=null){tySum+=ty;colTY[j]+=ty;}
+      if(ly!=null){lySum+=ly;colLY[j]+=ly;}
+      return'<td class="r" style="font-size:11px;line-height:1.25;">'+pair(ty,ly)+'</td>';
+    }).join('');
+    tTY+=(tySum||0);tLY+=(lySum||0);
+    var g=(lySum>0&&tySum!=null)?Math.round((tySum-lySum)/lySum*100):null;
     return'<tr><td style="font-weight:700;color:#3b82f6;cursor:pointer;position:sticky;left:0;background:#fff;" onclick="openDrill(\''+s.code+'\')">'+s.code+'</td>'+
-      '<td style="font-size:11px;color:#6b7280;position:sticky;left:72px;background:#fff;">'+s.rm+'</td>'+
-      labels.map(function(_,i){var v=lyArr?(lyArr[i]||0):null;return'<td class="r" style="font-size:11px;'+(v?'':'color:#9ca3af;')+'">'+(v?F(v):'—')+'</td>';}).join('')+
-      '<td class="r" style="font-weight:700;background:#fef3c7;">'+(lyArr?F(lySum):'—')+'</td>'+
+      '<td style="font-size:11px;color:#6b7280;position:sticky;left:72px;background:#fff;">'+s.rm+'</td>'+cells+
       '<td class="r" style="font-weight:700;background:#dbeafe;">'+(tySum!=null?F(tySum):'—')+'</td>'+
+      '<td class="r" style="font-weight:700;background:#fef3c7;">'+(lySum!=null?F(lySum):'—')+'</td>'+
       '<td class="r" style="font-weight:700;color:'+(g==null?'#9ca3af':(g>=0?'#16a34a':'#dc2626'))+';">'+(g==null?'—':((g>=0?'+':'')+g+'%'))+'</td></tr>';
   }).join('')+
   '<tr><td style="font-weight:700;position:sticky;left:0;background:#f3f4f6;">TOTAL</td><td style="position:sticky;left:72px;background:#f3f4f6;"></td>'+
-    colT.map(function(v){return'<td class="r" style="font-weight:700;background:#f3f4f6;font-size:11px;">'+(v?F(v):'—')+'</td>';}).join('')+
-    '<td class="r" style="font-weight:700;background:#fde68a;">'+F(tLY)+'</td>'+
+    vis.map(function(_,j){return'<td class="r" style="background:#f3f4f6;font-size:11px;line-height:1.25;">'+pair(anyTY?colTY[j]:null,colLY[j]||null)+'</td>';}).join('')+
     '<td class="r" style="font-weight:700;background:#bfdbfe;">'+F(tTY)+'</td>'+
+    '<td class="r" style="font-weight:700;background:#fde68a;">'+F(tLY)+'</td>'+
     '<td class="r" style="font-weight:700;color:'+(tLY>0?((tTY>=tLY)?'#16a34a':'#dc2626'):'#9ca3af')+';">'+(tLY>0?(((tTY-tLY)/tLY*100>=0?'+':'')+Math.round((tTY-tLY)/tLY*100)+'%'):'—')+'</td></tr>';
 }
 
