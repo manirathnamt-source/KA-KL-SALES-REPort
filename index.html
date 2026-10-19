@@ -1732,7 +1732,8 @@ function renderDaywiseLY(el){
   var tyArrOf=isWalk?function(s){return s.dayWalkIns||null;}:function(s){return s.daySales||[];};
   var N=l2lElapsed();if(!N)N=labels.length;
   var vis=[];for(var vi=0;vi<labels.length;vi++){if(rangeActive()?dayInRange(activeSheet,vi):(vi<N))vis.push(vi);}
-  document.getElementById('day-title').textContent='Day-wise '+(isWalk?'Walk-ins':'Sales')+' — TY vs LY ('+activeSheet+(rangeActive()?' · '+rangeLabel():'')+')'+(lyMap?'':'  ·  no last-year data for this month');
+  var winTxt=vis.length?(labels[vis[0]]+' → '+labels[vis[vis.length-1]]+' · '+vis.length+' days, both years'):'no days';
+  document.getElementById('day-title').textContent='Day-wise '+(isWalk?'Walk-ins':'Sales')+' — TY vs LY ('+winTxt+')'+(lyMap?'':'  ·  no last-year data for this month');
   function pair(ty,ly){
     var c=(ty!=null&&ly!=null&&ly>0)?(ty>=ly?'#16a34a':'#dc2626'):'#111827';
     return'<div style="font-weight:700;color:'+c+';">'+(ty!=null?F(ty):'—')+'</div><div style="font-size:10px;color:#9ca3af;">'+(ly!=null?F(ly):'—')+'</div>';
