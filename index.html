@@ -1732,11 +1732,13 @@ function renderDaywiseLY(el){
   var tyArrOf=isWalk?function(s){return s.dayWalkIns||null;}:function(s){return s.daySales||[];};
   var N=l2lElapsed();if(!N)N=labels.length;
   var vis=[];for(var vi=0;vi<labels.length;vi++){if(rangeActive()?dayInRange(activeSheet,vi):(vi<N))vis.push(vi);}
-  var winTxt=vis.length?(labels[vis[0]]+' → '+labels[vis[vis.length-1]]+' · '+vis.length+' days, both years'):'no days';
+  var winTxt=vis.length?(labels[vis[0]]+' → '+labels[vis[vis.length-1]]+' · '+vis.length+' days · LY counted only where TY entered'):'no days';
   document.getElementById('day-title').textContent='Day-wise '+(isWalk?'Walk-ins':'Sales')+' — TY vs LY ('+winTxt+')'+(lyMap?'':'  ·  no last-year data for this month');
-  function pair(ty,ly){
-    var c=(ty!=null&&ly!=null&&ly>0)?(ty>=ly?'#16a34a':'#dc2626'):'#111827';
-    return'<div style="font-weight:700;color:'+c+';">'+(ty!=null?F(ty):'—')+'</div><div style="font-size:10px;color:#9ca3af;">'+(ly!=null?F(ly):'—')+'</div>';
+  function pair(ty,ly,excl){
+    var c=(ty!=null&&ly!=null&&ly>0&&!excl)?(ty>=ly?'#16a34a':'#dc2626'):'#111827';
+    var lyStyle='font-size:10px;color:#9ca3af;'+(excl?'text-decoration:line-through;opacity:.55;':'');
+    var lyTitle=excl?' title="LY not counted — this day\'s sales not entered yet"':'';
+    return'<div style="font-weight:700;color:'+c+';">'+(ty!=null?F(ty):'—')+'</div><div style="'+lyStyle+'"'+lyTitle+'>'+(ly!=null?F(ly):'—')+'</div>';
   }
   el.innerHTML='<tr><th style="position:sticky;left:0;background:#f9fafb;z-index:2;">Store</th><th style="position:sticky;left:72px;background:#f9fafb;z-index:2;">RM<div style="font-size:9px;color:#9ca3af;font-weight:400;">TY over LY</div></th>'+
     vis.map(function(i,j){return'<th class="r" style="min-width:66px;" onclick="srt(\'t-day\','+(j+2)+')">'+labels[i]+'</th>';}).join('')+
@@ -1748,9 +1750,10 @@ function renderDaywiseLY(el){
     var tySum=tyArr?0:null,lySum=lyArr?0:null;
     var cells=vis.map(function(i,j){
       var ty=tyArr?(tyArr[i]||0):null,ly=lyArr?(lyArr[i]||0):null;
+      var counted=(ty!=null&&ty>0);           // LY counts only once TY is entered for this day
       if(ty!=null){tySum+=ty;colTY[j]+=ty;}
-      if(ly!=null){lySum+=ly;colLY[j]+=ly;}
-      return'<td class="r" style="font-size:11px;line-height:1.25;">'+pair(ty,ly)+'</td>';
+      if(ly!=null&&counted){lySum+=ly;colLY[j]+=ly;}
+      return'<td class="r" style="font-size:11px;line-height:1.25;">'+pair(ty,ly,(ly!=null&&ly>0&&!counted))+'</td>';
     }).join('');
     tTY+=(tySum||0);tLY+=(lySum||0);
     var g=(lySum>0&&tySum!=null)?Math.round((tySum-lySum)/lySum*100):null;
@@ -1890,12 +1893,14 @@ function storeL2L(s,N){
   var ly=L2L_DATA?L2L_DATA[activeSheet]:null;
   var lyArr=ly?ly[(s.code||'').toUpperCase()]:null;
   var ty,lyv;
+  // An LY day is counted ONLY once that day's TY sales are entered for this
+  // store — so a store that hasn't updated today never gets today's LY added.
   if(rangeActive()){
     ty=0;lyv=lyArr?0:null;var ds=s.daySales||[];
-    for(var i=0;i<ds.length;i++){if(dayInRange(activeSheet,i)){ty+=ds[i]||0;if(lyArr)lyv+=lyArr[i]||0;}}
+    for(var i=0;i<ds.length;i++){if(dayInRange(activeSheet,i)){var tv=ds[i]||0;ty+=tv;if(lyArr&&tv>0)lyv+=lyArr[i]||0;}}
   } else {
-    ty=(s.daySales||[]).slice(0,N).reduce(function(a,b){return a+b;},0);
-    lyv=lyArr?lyArr.slice(0,N).reduce(function(a,b){return a+b;},0):null;
+    ty=0;lyv=lyArr?0:null;var ds2=s.daySales||[];
+    for(var i2=0;i2<N&&i2<ds2.length;i2++){var tv2=ds2[i2]||0;ty+=tv2;if(lyArr&&tv2>0)lyv+=lyArr[i2]||0;}
   }
   var g=(lyv&&lyv>0)?Math.round((ty-lyv)/lyv*100):null;
   return {ty:ty,ly:lyv,g:g};
@@ -1918,8 +1923,9 @@ function aggStores(){
       c.target+=s.target||0;c.mtdSales+=s.mtdSales||0;c.projectedTotal+=s.projectedTotal||0;c.mtdBills+=s.mtdBills||0;c.mtdWalkIns+=s.mtdWalkIns||0;c.mtdSoldQty+=s.mtdSoldQty||0;c.daysCount=Math.max(c.daysCount,s.daysCount||0);c._tn++;
       c.kpiTargets.walkIns+=kt.walkIns||0;c.kpiTargets.bills+=kt.bills||0;c.kpiTargets.conversion+=kt.conversion||0;c.kpiTargets.abv+=kt.abv||0;c.kpiTargets.upt+=kt.upt||0;
       var arr=ly?ly[(s.code||'').toUpperCase()]:null,ty,lyv;
-      if(rangeActive()){ty=0;lyv=arr?0:null;var dsr=s.daySales||[];for(var ii=0;ii<dsr.length;ii++){if(dayInRange(m,ii)){ty+=dsr[ii]||0;if(arr)lyv+=arr[ii]||0;}}}
-      else {ty=(s.daySales||[]).slice(0,N).reduce(function(a,b){return a+b;},0);lyv=arr?arr.slice(0,N).reduce(function(a,b){return a+b;},0):null;}
+      // LY day counted only where that store's TY sales for the day are entered
+      if(rangeActive()){ty=0;lyv=arr?0:null;var dsr=s.daySales||[];for(var ii=0;ii<dsr.length;ii++){if(dayInRange(m,ii)){var tvv=dsr[ii]||0;ty+=tvv;if(arr&&tvv>0)lyv+=arr[ii]||0;}}}
+      else {ty=0;lyv=arr?0:null;var dsr2=s.daySales||[];for(var jj=0;jj<N&&jj<dsr2.length;jj++){var tvv2=dsr2[jj]||0;ty+=tvv2;if(arr&&tvv2>0)lyv+=arr[jj]||0;}}
       c._ty+=ty;if(lyv!=null){c._ly+=lyv;c._lyHas=true;}
     });
   });
