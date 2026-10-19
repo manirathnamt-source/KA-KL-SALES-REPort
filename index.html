@@ -1729,6 +1729,8 @@ function renderDaywiseLY(el){
   var isWalk=(DAY_LY==='walkins');
   var lyMap=(isWalk?(WLY_DATA&&WLY_DATA[activeSheet]):(L2L_DATA&&L2L_DATA[activeSheet]))||null;
   var F=isWalk?function(v){return Math.round(v).toLocaleString('en-IN');}:L;
+  // compact form for the LY line inside day cells (e.g. 48K / 1.2L / 850)
+  var FS=function(v){var a=Math.abs(v);if(a>=1e7)return (v/1e7).toFixed(1)+'Cr';if(a>=1e5)return (v/1e5).toFixed(1)+'L';if(a>=1e3)return Math.round(v/1e3)+'K';return String(Math.round(v));};
   var tyArrOf=isWalk?function(s){return s.dayWalkIns||null;}:function(s){return s.daySales||[];};
   var N=l2lElapsed();if(!N)N=labels.length;
   var vis=[];for(var vi=0;vi<labels.length;vi++){if(rangeActive()?dayInRange(activeSheet,vi):(vi<N))vis.push(vi);}
@@ -1738,7 +1740,7 @@ function renderDaywiseLY(el){
     var c=(ty!=null&&ly!=null&&ly>0&&!excl)?(ty>=ly?'#16a34a':'#dc2626'):'#111827';
     var lyStyle='font-size:10px;color:#9ca3af;'+(excl?'text-decoration:line-through;opacity:.55;':'');
     var lyTitle=excl?' title="LY not counted — this day\'s sales not entered yet"':'';
-    return'<div style="font-weight:700;color:'+c+';">'+(ty!=null?F(ty):'—')+'</div><div style="'+lyStyle+'"'+lyTitle+'>'+(ly!=null?F(ly):'—')+'</div>';
+    return'<div style="font-weight:700;color:'+c+';">'+(ty!=null?FS(ty):'—')+'</div><div style="'+lyStyle+'"'+lyTitle+'>'+(ly!=null?FS(ly):'—')+'</div>';
   }
   el.innerHTML='<tr><th style="position:sticky;left:0;background:#f9fafb;z-index:2;">Store</th><th style="position:sticky;left:72px;background:#f9fafb;z-index:2;">RM<div style="font-size:9px;color:#9ca3af;font-weight:400;">TY over LY</div></th>'+
     vis.map(function(i,j){return'<th class="r" style="min-width:66px;" onclick="srt(\'t-day\','+(j+2)+')">'+labels[i]+'</th>';}).join('')+
