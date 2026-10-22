@@ -331,6 +331,7 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <div class="tab danger" onclick="showTab('audit',this)">&#128270; Audit</div>
   <div class="tab" onclick="showTab('category',this)">&#128142; Category</div>
   <div class="tab" onclick="showTab('visits',this)">&#128694; Store Visits</div>
+  <div class="tab" onclick="showTab('rmkpi',this)">&#127919; RM / CM KPI H2</div>
 </div>
 
 <!-- CONTENT -->
@@ -354,6 +355,24 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <div class="tw"><table id="t-store"><thead><tr>
     <th onclick="srt('t-store',0)">Store</th><th onclick="srt('t-store',1)">RM</th><th onclick="srt('t-store',2)">CM</th><th class="r" onclick="srt('t-store',3)">Target</th><th class="r" onclick="srt('t-store',4)">MTD</th><th class="r" onclick="srt('t-store',5)">Ach%</th><th class="r" onclick="srt('t-store',6)">Proj</th><th class="r" onclick="srt('t-store',7)">Proj%</th><th class="r" onclick="srt('t-store',8)">W-ins</th><th class="r" onclick="srt('t-store',9)">W-ins Tgt</th><th class="r" onclick="srt('t-store',10)">W-ins Proj</th><th class="r" onclick="srt('t-store',11)">W-ins Proj%</th><th class="r" onclick="srt('t-store',12)">W-in%</th><th class="r" onclick="srt('t-store',13)">Conv%</th><th class="r" onclick="srt('t-store',14)">Conv Tgt</th><th class="r" onclick="srt('t-store',15)">Conv Proj%</th><th class="r" onclick="srt('t-store',16)">ABV</th><th class="r" onclick="srt('t-store',17)">ABV Tgt</th><th class="r" onclick="srt('t-store',18)">UPT</th><th class="r" onclick="srt('t-store',19)">UPT Tgt</th><th class="r" onclick="srt('t-store',20)">Needed/day</th>
   </tr></thead><tbody id="b-store"></tbody></table></div>
+</div>
+
+<!-- RM / CM KPI — H2 (PIN-locked) -->
+<div class="panel" id="panel-rmkpi">
+  <div id="rmk-lock" style="max-width:320px;margin:40px auto;text-align:center;">
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px;">&#128274; RM / CM KPI — enter PIN</div>
+    <input id="rmk-pin" type="password" inputmode="numeric" maxlength="8" onkeydown="if(event.key==='Enter')rmkUnlock()" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;width:140px;text-align:center;">
+    <button class="wkbtn active" onclick="rmkUnlock()" style="margin-left:6px;">Unlock</button>
+    <div id="rmk-pin-msg" class="rv" style="font-size:11px;margin-top:8px;"></div>
+  </div>
+  <div id="rmk-body" style="display:none;">
+    <div class="wkbar" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px;">
+      <span style="font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Person:</span>
+      <span id="rmk-people" style="display:flex;flex-wrap:wrap;gap:6px;"></span>
+      <span id="rmk-status" style="font-size:11px;color:var(--text2);margin-left:8px;"></span>
+    </div>
+    <div id="rmk-out"></div>
+  </div>
 </div>
 
 <!-- SUMMARY (RM & CM — Target vs Achievement: Main & AOP) -->
@@ -3080,6 +3099,228 @@ function showTab(id,el){
   document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active');});
   var panel=document.getElementById('panel-'+id);if(panel)panel.classList.add('active');
   el.classList.add('active');
+  if(id==='rmkpi')rmkShow();
+}
+
+// ═══════════════════════════════════════════
+// RM / CM KPI — H2 FY26-27 (Sep'26 → Mar'27), from "RM / CM KPI Allocation FY 2026-27"
+// ═══════════════════════════════════════════
+// code: [name, RM, CM, cohort LFL|LY, Sep..Mar budget ₹, Sep–Mar FY26 actual ₹ (LFL only)]
+var RMK_STORES={
+  "BLRARS":["BLR - ARS COMPLEX MALLESHWARAM","Sathish Kumar","Ambarish","LFL",[2684000,3419000,2684000,3382000,3272000,3382000,4412000],23750000],
+  "BLRBEL":["BLR - BEL ROAD","Sathish Kumar","Mudassir Quardi","LFL",[2175000,2771000,2175000,2741000,2652000,2741000,3575000],17687000],
+  "BLRCST":["BLR - COMMERCIAL STREET","Sathish Kumar","Mudassir Quardi","LFL",[8847000,11271000,8847000,11150000,10786000,11150000,14543000],77830000],
+  "BLRSNK":["BLR - FORUM SHANTINIKETAN MALL","Sathish Kumar","Ambarish","LFL",[4239000,5400000,4239000,5342000,5168000,5342000,6968000],31749000],
+  "BLRGRD":["BLR - GARUDA MALL","Sathish Kumar","Ambarish","LFL",[772000,983000,772000,973000,941000,973000,1269000],7459000],
+  "BLRHNR":["BLR - HENNUR ROAD","Sathish Kumar","Mudassir Quardi","LFL",[2548000,3246000,2548000,3211000,3106000,3211000,4188000],18542000],
+  "BLRIND":["BLR - INDIRANAGAR","Sathish Kumar","Ambarish","LFL",[4855000,6186000,4855000,6119000,5920000,6119000,7982000],39899000],
+  "BLRKHL":["BLR - KAMMANAHALLI","Sathish Kumar","Mudassir Quardi","LFL",[4132000,5264000,4132000,5208000,5038000,5208000,6793000],31403000],
+  "BLRMOA":["BLR - MALL OF ASIA","Sathish Kumar","Mudassir Quardi","LFL",[4504000,5738000,4504000,5676000,5491000,5676000,7404000],33413000],
+  "BLRMAL":["BLR - MALLESWARAM","Sathish Kumar","Ambarish","LFL",[2016000,2568000,2016000,2540000,2457000,2540000,3313000],18635000],
+  "BLRMNT":["BLR - MANTRI MALL","Sathish Kumar","Ambarish","LFL",[3802000,4844000,3802000,4792000,4636000,4792000,6251000],31302000],
+  "BLRORN":["BLR - ORION MALL","Sathish Kumar","Ambarish","LFL",[3767000,4799000,3767000,4748000,4593000,4748000,6193000],30717000],
+  "BLRWPX":["BLR - PHOENIX MALL WHITEFIELD","Sathish Kumar","Ambarish","LFL",[6001000,7645000,6001000,7563000,7316000,7563000,9864000],47221000],
+  "BLRRMZ":["BLR - RMZ MALL","Sathish Kumar","Mudassir Quardi","LFL",[2115000,2695000,2115000,2666000,2579000,2666000,3477000],17160000],
+  "BLRSKR":["BLR - SAHAKARNAGAR","Sathish Kumar","Mudassir Quardi","LFL",[4400000,5606000,4400000,5545000,5365000,5545000,7233000],36337000],
+  "BGMABR":["BGM - AMBEDKAR ROAD","Sathish Kumar","Mudassir Quardi","LFL",[2085000,2656000,2085000,2628000,2542000,2628000,3427000],18350000],
+  "HBLGKR":["HBL - GOKUL ROAD","Sathish Kumar","Mudassir Quardi","LFL",[2241000,2855000,2241000,2824000,2732000,2824000,3684000],14911000],
+  "HBLKPR":["HBL - KOPPIKAR ROAD","Sathish Kumar","Mudassir Quardi","LFL",[3166000,4034000,3166000,3991000,3860000,3991000,5205000],24962000],
+  "HSPVCR":["HSP - VIJAYANAGAR COLLEGE ROAD","Sathish Kumar","Ambarish","LFL",[2124000,2706000,2124000,2677000,2589000,2677000,3491000],13442000],
+  "BLR4JN":["BLR - 4TH BLOCK JAYANAGAR","Manirathnam","Azra Nazreen","LFL",[3315000,4224000,3315000,4178000,4042000,4178000,5450000],24091000],
+  "BLRBSW":["BLR - BASAWESHWAR NAGAR","Manirathnam","P Kanagarathinam","LFL",[3650000,4649000,3650000,4599000,4450000,4599000,5999000],29180000],
+  "BLRDVG":["BLR - DVG ROAD","Manirathnam","P Kanagarathinam","LFL",[2576000,3281000,2576000,3246000,3140000,3246000,4234000],20598000],
+  "BLRFSB":["BLR - FORUM SOUTH BANGALORE","Manirathnam","Azra Nazreen","LFL",[5726000,7295000,5726000,7217000,6981000,7217000,9413000],43031000],
+  "BLRHSR":["BLR - HSR LAYOUT","Manirathnam","Azra Nazreen","LFL",[8534000,10872000,8534000,10755000,10404000,10755000,14028000],71655000],
+  "BLRJAY":["BLR - JAYNAGAR","Manirathnam","P Kanagarathinam","LFL",[9339000,11897000,9339000,11769000,11385000,11769000,15351000],84337000],
+  "BLRKGP":["BLR - KATHRIGUPPE","Manirathnam","Azra Nazreen","LFL",[2225000,2835000,2225000,2804000,2713000,2804000,3658000],17687000],
+  "BLRRMM":["BLR - ROYAL MEENAKSHI MALL","Manirathnam","Azra Nazreen","LFL",[1871000,2384000,1871000,2358000,2281000,2358000,3076000],14753000],
+  "BLRRRN":["BLR - RR NAGAR","Manirathnam","Azra Nazreen","LFL",[3698000,4712000,3698000,4661000,4509000,4661000,6080000],30008000],
+  "BLRVGA":["BLR - VEGA CITY MALL","Manirathnam","P Kanagarathinam","LFL",[2241000,2855000,2241000,2824000,2732000,2824000,3684000],17069000],
+  "KCHFRM":["KCH - FORUM MALL","Manirathnam","Azra Nazreen","LFL",[1322000,1684000,1322000,1666000,1612000,1666000,2173000],9421000],
+  "KCHLUL":["KCH - LULU MALL","Manirathnam","Azra Nazreen","LFL",[2797000,3564000,2797000,3525000,3410000,3525000,4598000],23442000],
+  "KCHMGR":["KCH - MG ROAD","Manirathnam","Azra Nazreen","LFL",[1415000,1802000,1415000,1783000,1725000,1783000,2326000],8966000],
+  "TRVLUL":["TRV - LULU MALL","Manirathnam","Azra Nazreen","LFL",[1720000,2191000,1720000,2167000,2097000,2167000,2827000],13517000],
+  "MGLBMT":["MGL - BALMATTA","Manirathnam","P Kanagarathinam","LFL",[1866000,2377000,1866000,2351000,2275000,2351000,3067000],15639000],
+  "MGLCCM":["MGL - CITY CENTER MALL","Manirathnam","P Kanagarathinam","LFL",[2090000,2663000,2090000,2634000,2548000,2634000,3436000],17641000],
+  "MYSDUR":["MYS - DEVRAJ URS ROAD","Manirathnam","P Kanagarathinam","LFL",[5518000,7030000,5518000,6954000,6727000,6954000,9071000],42998000],
+  "MYSMOM":["MYS - MALL OF MYSORE","Manirathnam","P Kanagarathinam","LFL",[946000,1205000,946000,1192000,1153000,1192000,1554000],8478000],
+  "MYSNEX":["MYS - NEXUS MALL","Manirathnam","P Kanagarathinam","LFL",[1507000,1920000,1507000,1899000,1838000,1899000,2478000],10910000],
+  "UDPMMT":["UDP - MAIN MARKET","Manirathnam","P Kanagarathinam","LFL",[2308000,2940000,2308000,2908000,2814000,2908000,3793000],18005000],
+  "BLRKRP":["BLR - K R PURAM","Sathish Kumar","Ambarish","LY",[3013000,3838000,3013000,3797000,3673000,3797000,4953000],0],
+  "BLRWMR":["BLR - WHITEFIELD MAIN ROAD","Sathish Kumar","Ambarish","LY",[1968000,2507000,1968000,2480000,2399000,2480000,3235000],0],
+  "BGMMPR":["BGM - MAHATMA PHULE ROAD","Sathish Kumar","Mudassir Quardi","LY",[1797000,2289000,1797000,2265000,2191000,2265000,2954000],0],
+  "BLRNKM":["BLR - NEXUS KORAMANGALA MALL","Manirathnam","P Kanagarathinam","LY",[3016000,3842000,3016000,3801000,3677000,3801000,4958000],0],
+  "BLRSMR":["BLR - SARJAPUR MAIN ROAD","Manirathnam","P Kanagarathinam","LY",[3401000,4333000,3401000,4286000,4146000,4286000,5591000],0],
+  "MGLNFM":["MGL - NEXUS FIZA MALL","Manirathnam","P Kanagarathinam","LY",[797000,1015000,797000,1004000,971689,1004000,1310000],0]
+};
+var RMK_MONTHS=['SEP','OCT','NOV','DEC','JAN','FEB','MAR'];
+var RMK_PIN='2627';
+// Conversion rating bands: achievement of target → rating (LY conversion held = 1, +5% = 4)
+var RMK_CONV_BANDS=[[1,4],[0.9841,3],[0.9683,2],[0.9524,1]];
+var RMK_SALES_BANDS=[[1,4],[0.98,3],[0.96,2],[0.94,1]];
+var RMK_PEOPLE=[
+  {id:'Manirathnam',role:'RM',conv:0.3899,prime:['BLRJAY','BLRHSR','BLRFSB'],open:'Store App, Dashboard - Power BI'},
+  {id:'Sathish Kumar',role:'RM',conv:0.3903,prime:['BLRCST','BLRWPX','BLRIND'],open:'NSO & Display'},
+  {id:'Azra Nazreen',role:'CM',rm:'Manirathnam',conv:0.3561,prime:['BLRHSR','BLRFSB'],cx:'9 of 10'},
+  {id:'P Kanagarathinam',role:'CM',rm:'Manirathnam',conv:0.4236,prime:['BLRJAY','MYSDUR'],cx:'12 of 13'},
+  {id:'Mudassir Quardi',role:'CM',rm:'Sathish Kumar',conv:0.4065,prime:['BLRCST','BLRMOA'],cx:'10 of 11'},
+  {id:'Ambarish',role:'CM',rm:'Sathish Kumar',conv:0.3723,prime:['BLRWPX','BLRIND'],cx:'10 of 11'}
+];
+var RMK_DATA={};          // month -> {stores, totalDays}
+var rmkSel='Manirathnam',rmkLoading=false;
+
+function rmkUnlocked(){try{return sessionStorage.getItem('ka_rmk')==='1';}catch(e){return false;}}
+function rmkUnlock(){
+  var inp=document.getElementById('rmk-pin');
+  if(inp&&inp.value===RMK_PIN){try{sessionStorage.setItem('ka_rmk','1');}catch(e){}rmkShow();}
+  else{var m=document.getElementById('rmk-pin-msg');if(m)m.textContent='Wrong PIN';}
+}
+// Months of H2 up to the current calendar month
+function rmkMonthsToDate(){
+  var d=new Date(),n=d.getFullYear()*100+d.getMonth()+1;
+  return RMK_MONTHS.filter(function(m){var ym=FY_YM[m];return ym[0]*100+ym[1]<=n;});
+}
+function rmkIsCurrent(m){var d=new Date(),ym=FY_YM[m];return ym[0]===d.getFullYear()&&ym[1]===d.getMonth()+1;}
+function rmkShow(){
+  var lock=document.getElementById('rmk-lock'),body=document.getElementById('rmk-body');
+  if(!lock||!body)return;
+  if(!rmkUnlocked()){lock.style.display='';body.style.display='none';return;}
+  lock.style.display='none';body.style.display='';
+  rmkLoad();rmkRender();
+}
+function rmkLoad(){
+  if(!activeURL||rmkLoading)return;
+  var need=rmkMonthsToDate().filter(function(m){return !RMK_DATA[m]||rmkIsCurrent(m);});
+  if(!need.length)return;
+  rmkLoading=true;rmkStatus('Loading '+need.join(', ')+'…');
+  Promise.all(need.map(function(m){
+    return jfetch(activeURL,m).then(function(d){if(d&&d.stores)RMK_DATA[m]={stores:d.stores,totalDays:d.totalDaysInMonth||30};}).catch(function(){});
+  })).then(function(){rmkLoading=false;rmkStatus('');rmkRender();});
+}
+function rmkStatus(t){var e=document.getElementById('rmk-status');if(e)e.textContent=t;}
+function rmkSelect(id){rmkSel=id;rmkRender();}
+
+// Per-store H2-to-date figures; current month run-rated to month end
+function rmkStoreRows(){
+  var ms=rmkMonthsToDate(),rows={};
+  Object.keys(RMK_STORES).forEach(function(c){
+    var s=RMK_STORES[c];
+    rows[c]={code:c,name:s[0],rm:s[1],cm:s[2],coh:s[3],bud:0,budH2:s[4].reduce(function(a,b){return a+b;},0),lyH2:s[5],
+      sal:0,proj:0,bil:0,bilP:0,wlk:0,wlkP:0,wt:0,ly:0,months:0};
+  });
+  ms.forEach(function(m){
+    var mi=RMK_MONTHS.indexOf(m),D=RMK_DATA[m],cur=rmkIsCurrent(m);
+    var by={};if(D)D.stores.forEach(function(s){by[((s.code||'')+'').toUpperCase()]=s;});
+    Object.keys(rows).forEach(function(c){
+      var r=rows[c],s=by[c];r.bud+=RMK_STORES[c][4][mi];
+      if(L2L_DATA&&L2L_DATA[m]&&L2L_DATA[m][c])r.ly+=L2L_DATA[m][c].reduce(function(a,b){return a+(b||0);},0);
+      if(!s)return;
+      var f=(cur&&s.daysCount)?D.totalDays/s.daysCount:1;
+      r.sal+=s.mtdSales||0;r.proj+=(s.mtdSales||0)*f;
+      r.bil+=s.mtdBills||0;r.bilP+=(s.mtdBills||0)*f;
+      r.wlk+=s.mtdWalkIns||0;r.wlkP+=(s.mtdWalkIns||0)*f;
+      r.wt+=((s.kpiTargets||{}).walkIns)||0;r.months++;
+    });
+  });
+  return rows;
+}
+function rmkBand(a,bands){a=Math.round(a*1e4)/1e4;for(var i=0;i<bands.length;i++)if(a>=bands[i][0]-1e-9)return bands[i][1];return 0;}
+function rmkAgg(list){
+  var g={bud:0,budH2:0,lyH2:0,sal:0,proj:0,bil:0,bilP:0,wlk:0,wlkP:0,wt:0,ly:0,n:list.length};
+  list.forEach(function(r){for(var k in g)if(k!=='n')g[k]+=r[k];});
+  g.wAch=g.wt?g.wlkP/g.wt:null;                       // walk-in achievement (projected)
+  g.rest=g.bud*Math.min(1,g.wAch==null?1:g.wAch);     // restated target — downward only
+  g.ach=g.rest?g.proj/g.rest:null;
+  return g;
+}
+function rmkPct(v,d){return v==null?'—':(v*100).toFixed(d==null?1:d)+'%';}
+function rmkRating(r){return r==null?'<span style="color:#9ca3af;">pending</span>':'<b class="'+(r>=4?'gv':r>=2?'av':'rv')+'">'+r+'</b>';}
+
+function rmkRender(){
+  var el=document.getElementById('rmk-out');if(!el||!rmkUnlocked())return;
+  var btns=document.getElementById('rmk-people');
+  if(btns)btns.innerHTML=RMK_PEOPLE.map(function(p){
+    return '<button class="wkbtn'+(p.id===rmkSel?' active':'')+'" onclick="rmkSelect(\''+p.id+'\')">'+p.id+' <span style="font-size:9px;opacity:.7;">'+p.role+'</span></button>';
+  }).join('');
+  if(!activeURL){el.innerHTML='<div style="padding:18px;color:#9ca3af;">Load the Apps Script URL first (top bar ▶ Load).</div>';return;}
+  var ms=rmkMonthsToDate();
+  if(!ms.length){el.innerHTML='<div style="padding:18px;color:#9ca3af;">H2 starts in September 2026.</div>';return;}
+  var rows=rmkStoreRows();
+  var summary=RMK_PEOPLE.map(function(p){return rmkScore(p,rows);});
+  var P=RMK_PEOPLE.filter(function(p){return p.id===rmkSel;})[0]||RMK_PEOPLE[0];
+  var sc=rmkScore(P,rows);
+  var cur=ms.filter(rmkIsCurrent)[0];
+  var period='Sep → '+ms[ms.length-1].charAt(0)+ms[ms.length-1].slice(1).toLowerCase()+(cur?' (current month projected to month end)':'');
+  var missing=ms.filter(function(m){return !RMK_DATA[m];});
+
+  var h='<div style="font-size:11px;color:var(--text2);margin:4px 0 10px;">Period: <b>'+period+'</b>'+(missing.length?' · <span class="rv">no data yet for '+missing.join(', ')+'</span>':'')+'</div>';
+  // Summary strip — all six people
+  h+='<div class="sh"><span class="sh-t">Scorecard summary</span><div class="sh-l"></div></div><div class="tw"><table><thead><tr><th>Name</th><th>Role</th><th class="r">Stores</th><th class="r">LY-store Sales Ach</th><th class="r">SSSG Ach</th><th class="r">Conv%</th><th class="r">Conv Tgt</th><th class="r">Prime Ach</th><th class="r">W-in Ach</th><th class="r">Score (rated rows)</th><th class="r">Weight rated</th></tr></thead><tbody>'+
+    summary.map(function(s){var k=s.k;return '<tr style="cursor:pointer;'+(s.p.id===rmkSel?'background:var(--blue-bg,#eff6ff);':'')+'" onclick="rmkSelect(\''+s.p.id+'\')"><td style="font-weight:700;color:#3b82f6;">'+s.p.id+'</td><td>'+s.p.role+(s.p.rm?' · '+s.p.rm:'')+'</td><td class="r">'+s.all.n+'</td>'+
+      '<td class="r">'+(k.ly.n?rmkPct(k.ly.ach)+' ('+rmkRating(s.r.ly)+')':'—')+'</td><td class="r">'+rmkPct(k.lfl.ach)+' ('+rmkRating(s.r.sssg)+')</td>'+
+      '<td class="r">'+rmkPct(s.conv,2)+' ('+rmkRating(s.r.conv)+')</td><td class="r" style="color:#9ca3af;">'+rmkPct(s.p.conv,2)+'</td>'+
+      '<td class="r">'+rmkPct(k.prime.ach)+' ('+rmkRating(s.r.prime)+')</td><td class="r">'+rmkPct(s.all.wAch)+'</td>'+
+      '<td class="r '+pc(Math.round(s.score*100))+'" style="font-weight:700;">'+rmkPct(s.score,0)+'</td><td class="r" style="color:#9ca3af;">'+Math.round(s.wRated*100)+'%</td></tr>';}).join('')+'</tbody></table></div>';
+
+  // KPI sheet for the selected person
+  var k=sc.k;
+  var kr=[
+    {g:'1. Drive Revenue & Profitability',l:'Sales vs Budget — stores opened last year ('+k.ly.n+')',w:0.10,t:k.ly.n?L(k.ly.budH2)+' (Sep–Mar)':'No LY stores',
+      a:k.ly.n?L(k.ly.proj)+' vs restated '+L(k.ly.rest)+' <span style="color:#9ca3af;">(budget '+L(k.ly.bud)+' × w-in '+rmkPct(Math.min(1,k.ly.wAch==null?1:k.ly.wAch),0)+')</span>':'—',p:k.ly.n?rmkPct(k.ly.ach):'n/a',r:sc.r.ly,na:!k.ly.n},
+    {l:'Same Store Sales Growth — LFL stores ('+k.lfl.n+')',w:0.20,t:'Growth '+rmkPct(k.lfl.lyH2?k.lfl.budH2/k.lfl.lyH2-1:null)+' · '+L(k.lfl.budH2),
+      a:L(k.lfl.proj)+' vs restated '+L(k.lfl.rest)+' · growth vs LY '+(k.lfl.ly?rmkPct(k.lfl.proj/k.lfl.ly-1):'—'),p:rmkPct(k.lfl.ach),r:sc.r.sssg},
+    {l:'Walk-in achievement vs Marketing target',w:null,t:N(k.lfl.wt+k.ly.wt),a:N(Math.round(sc.all.wlkP))+' projected',p:rmkPct(sc.all.wAch),r:'ref'},
+    {g:'2. Improve Customer & Store Performance',l:'Store Conversion — LFL stores',w:0.25,t:rmkPct(P.conv,2)+' <span style="color:#9ca3af;">(LY held = '+rmkPct(P.conv/1.05,2)+')</span>',
+      a:N(Math.round(k.lfl.bil))+' bills ÷ '+N(Math.round(k.lfl.wlk))+' walk-ins',p:rmkPct(sc.conv,2),r:sc.r.conv}
+  ];
+  if(P.role==='RM'){
+    kr.push({g:'3. Training',l:'OJT (≥ 90% coverage) + Mystery Audit & Audit (≥ 85%)',w:0.20,t:'≥ 90% / ≥ 85%',a:'—',p:'—',r:null});
+    kr.push({g:'4. Projects',l:'Top 3 Prime Stores — '+P.prime.join(', '),w:0.15,t:L(k.prime.budH2)+' (Sep–Mar)',a:L(k.prime.proj)+' vs restated '+L(k.prime.rest),p:rmkPct(k.prime.ach),r:sc.r.prime});
+    kr.push({l:P.open,w:0.10,t:'To be set',a:'—',p:'—',r:null});
+  } else {
+    kr.push({g:'3. Training & Retention',l:'OJT (≥ 90% coverage)',w:0.10,t:'≥ 90%',a:'—',p:'—',r:null});
+    kr.push({l:'Attrition — store staff',w:0.10,t:'< 5%',a:'—',p:'—',r:null});
+    kr.push({g:'4. Projects',l:'Top 2 Prime Stores — '+P.prime.join(', '),w:0.15,t:L(k.prime.budH2)+' (Sep–Mar)',a:L(k.prime.proj)+' vs restated '+L(k.prime.rest),p:rmkPct(k.prime.ach),r:sc.r.prime});
+    kr.push({l:'Customer Experience Scorecard — stores above 90%',w:0.10,t:P.cx+' stores',a:'—',p:'—',r:null});
+  }
+  h+='<div class="sh" style="margin-top:16px;"><span class="sh-t">'+P.id+' — '+(P.role==='RM'?'Regional Manager':'Cluster Manager · reports to '+P.rm)+'</span><div class="sh-l"></div></div>'+
+    '<div class="tw"><table><thead><tr><th>Goal / Parameter</th><th class="r">Weight</th><th>Target</th><th>Actual (to date)</th><th class="r">Ach%</th><th class="r">Rating (0–4)</th><th class="r">Weighted</th></tr></thead><tbody>'+
+    kr.map(function(r){
+      var wtd=(r.r==null||r.r==='ref'||r.na)?'—':(r.w*r.r/4*100).toFixed(1)+'%';
+      return (r.g?'<tr><td colspan="7" style="font-weight:700;background:var(--bg2,#f8fafc);font-size:11px;">'+r.g+'</td></tr>':'')+
+        '<tr><td style="padding-left:18px;">'+r.l+'</td><td class="r">'+(r.w==null?'<span style="color:#9ca3af;">ref</span>':Math.round(r.w*100)+'%')+'</td><td>'+r.t+'</td><td>'+r.a+'</td><td class="r">'+r.p+'</td><td class="r">'+(r.r==='ref'?'<span style="color:#9ca3af;">not rated</span>':r.na?'<span style="color:#9ca3af;">n/a</span>':rmkRating(r.r))+'</td><td class="r">'+wtd+'</td></tr>';
+    }).join('')+
+    '<tr class="ft"><td>Score on rated rows</td><td class="r">'+Math.round(sc.wRated*100)+'%</td><td colspan="3" style="font-weight:400;">'+(sc.wRated<1?'Pending rows carry no score yet':'')+'</td><td></td><td class="r">'+rmkPct(sc.score,0)+'</td></tr></tbody></table></div>';
+
+  // Store detail
+  var list=sc.list.slice().sort(function(a,b){return (b.budH2)-(a.budH2);});
+  h+='<div class="sh" style="margin-top:16px;"><span class="sh-t">Stores — '+P.id+'</span><div class="sh-l"></div><button class="dl" onclick="dlT(\'t-rmk-store\',\'RMKPI_'+P.id.replace(/\s+/g,'_')+'\')">&#8595; CSV</button></div>'+
+    '<div class="tw"><table id="t-rmk-store"><thead><tr><th>Store</th>'+(P.role==='RM'?'<th>CM</th>':'')+'<th>Cohort</th><th class="r">Budget to date</th><th class="r">Sales</th><th class="r">Projected</th><th class="r">Ach%</th><th class="r">LY to date</th><th class="r">Growth</th><th class="r">W-ins Proj</th><th class="r">W-ins Tgt</th><th class="r">W-in Ach</th><th class="r">Conv%</th></tr></thead><tbody>'+
+    list.map(function(r){
+      var a=r.bud?r.proj/r.bud:null,w=r.wt?r.wlkP/r.wt:null,cv=r.wlk?r.bil/r.wlk:null,gr=(r.coh==='LFL'&&r.ly)?r.proj/r.ly-1:null;
+      return '<tr><td style="font-weight:700;color:#3b82f6;">'+r.code+(P.prime.indexOf(r.code)>=0?' ★':'')+' <span style="font-size:10px;color:#9ca3af;font-weight:400;">'+r.name+'</span></td>'+(P.role==='RM'?'<td>'+r.cm+'</td>':'')+'<td>'+r.coh+'</td>'+
+        '<td class="r">'+L(r.bud)+'</td><td class="r">'+L(r.sal)+'</td><td class="r">'+L(Math.round(r.proj))+'</td><td class="r '+(a!=null?pc(Math.round(a*100)):'')+'">'+rmkPct(a,0)+'</td>'+
+        '<td class="r">'+(r.coh==='LFL'?L(r.ly):'—')+'</td><td class="r '+(gr!=null?(gr>=0?'gv':'rv'):'')+'">'+rmkPct(gr)+'</td>'+
+        '<td class="r">'+N(Math.round(r.wlkP))+'</td><td class="r" style="color:#9ca3af;">'+(r.wt?N(r.wt):'—')+'</td><td class="r '+(w!=null?pc(Math.round(w*100)):'')+'">'+rmkPct(w,0)+'</td>'+
+        '<td class="r '+(cv!=null&&r.coh==='LFL'?(cv>=P.conv?'gv':cv>=P.conv/1.05?'av':'rv'):'')+'">'+rmkPct(cv)+'</td></tr>';
+    }).join('')+'</tbody></table></div>'+
+    '<div style="font-size:10px;color:#9ca3af;margin-top:8px;line-height:1.6;">★ prime store · Restated target = Budget × walk-in achievement (downward only) · Sales rating: 100% = 4, 98% = 3, 96% = 2, 94% = 1 · Conversion rating: target = 4, LY conversion held = 1, below LY = 0 · Budgets and store mapping from the KPI Allocation workbooks (Sep\'26–Mar\'27).</div>';
+  el.innerHTML=h;
+}
+// Compute the rated KPI rows for one person
+function rmkScore(p,rows){
+  var list=Object.keys(rows).map(function(c){return rows[c];}).filter(function(r){return p.role==='RM'?r.rm===p.id:r.cm===p.id;});
+  var k={ly:rmkAgg(list.filter(function(r){return r.coh==='LY';})),lfl:rmkAgg(list.filter(function(r){return r.coh==='LFL';})),
+    prime:rmkAgg(list.filter(function(r){return p.prime.indexOf(r.code)>=0;}))};
+  var all=rmkAgg(list);
+  var conv=k.lfl.wlk?k.lfl.bil/k.lfl.wlk:null;
+  var r={ly:k.ly.n&&k.ly.ach!=null?rmkBand(k.ly.ach,RMK_SALES_BANDS):null,
+    sssg:k.lfl.ach!=null?rmkBand(k.lfl.ach,RMK_SALES_BANDS):null,
+    conv:conv!=null?rmkBand(conv/p.conv,RMK_CONV_BANDS):null,
+    prime:k.prime.ach!=null?rmkBand(k.prime.ach,RMK_SALES_BANDS):null};
+  var W={ly:0.10,sssg:0.20,conv:0.25,prime:0.15},num=0,wr=0;
+  Object.keys(W).forEach(function(x){if(r[x]!=null){num+=W[x]*r[x]/4;wr+=W[x];}});
+  return {p:p,k:k,all:all,conv:conv,r:r,score:wr?num/wr:0,wRated:wr,list:list};
 }
 
 // ═══════════════════════════════════════════
