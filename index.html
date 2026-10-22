@@ -1418,6 +1418,10 @@ function renderKPIs(){
   data.forEach(function(s){tgt+=s.target;sal+=s.mtdSales;bil+=s.mtdBills;wlk+=s.mtdWalkIns;qty+=s.mtdSoldQty;proj+=s.projectedTotal||0;});
   var ap=tgt?Math.round(sal/tgt*100):0,tp=tgt?Math.round(proj/tgt*100):0;
   var abv=bil?Math.round(sal/bil):0,conv=wlk?Math.round(bil/wlk*1000)/10:0,upt=bil?Math.round(qty/bil*100)/100:0;
+  // Conversion projection: month-end bills ÷ month-end walk-ins (each store run-rated), vs avg store conv target
+  var pb=0,pw=0,cts=0,ctn=0;
+  data.forEach(function(s){var kt=s.kpiTargets||{};if(s.daysCount){pb+=s.mtdBills/s.daysCount*totalDays;pw+=s.mtdWalkIns/s.daysCount*totalDays;}if(kt.conversion>0&&kt.conversion<=100){cts+=kt.conversion;ctn++;}});
+  var cproj=pw?Math.round(pb/pw*1000)/10:0,ctgt=ctn?Math.round(cts/ctn*10)/10:0,cpp=ctgt?Math.round(cproj/ctgt*100):null;
   var on=data.filter(function(s){return s.trendingPct>=100;}).length;
   var lf=regionL2L(data);   // like-for-like vs last FY, respecting filter + selected months
   var mlbl=(selMonths&&selMonths.length>1)?(' · '+selMonths.length+' months'):'';
@@ -1430,6 +1434,7 @@ function renderKPIs(){
     {l:'L2L Grow / Degrow',v:lf.grow+' / '+lf.degrow,s:'growing / de-growing',c:'',key:'l2l'},
     {l:'Walk-ins',v:N(wlk),s:'MTD total',c:'',key:'walkins'},
     {l:'Conv%',v:conv+'%',s:'bills ÷ walkins',c:'',key:'conv'},
+    {l:'Conv Proj%',v:(cpp==null?'—':cpp+'%'),s:(ctgt?'proj '+cproj+'% vs tgt '+ctgt+'%':'no conv target'),c:(cpp==null?'':(cpp>=100?'grn':'red')),key:'conv'},
     {l:'ABV',v:abv?'₹'+abv.toLocaleString('en-IN'):'—',s:'avg bill value',c:'',key:'abv'},
     {l:'UPT',v:R2(upt),s:'units per bill',c:'',key:'upt'},
   ].map(function(c){
