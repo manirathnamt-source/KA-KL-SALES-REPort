@@ -2399,23 +2399,6 @@ function renderAudit(){
 function openDrill(code){
   var s=raw.find(function(x){return x.code===code;});if(!s)return;
 
-  // Match category detail
-  var cd=null;
-  if(catData&&catData.storeDetails){
-    var keys=Object.keys(catData.storeDetails);
-    for(var ki=0;ki<keys.length;ki++){
-      var key=keys[ki];
-      if(key.toUpperCase().indexOf(code.toUpperCase())!==-1||
-        (s.name&&s.name.length>4&&key.toUpperCase().indexOf(s.name.slice(0,8).toUpperCase())!==-1)){
-        cd=catData.storeDetails[key];break;
-      }
-    }
-    if(!cd&&catData.stores){
-      var st=catData.stores.find(function(x){return x.code===code;});
-      if(st&&catData.storeDetails[st.name])cd=catData.storeDetails[st.name];
-    }
-  }
-  window._popupCd=cd;
 
   var kt=s.kpiTargets||{},dL=Math.max(0,totalDays-(s.daysCount||0));
   var dTgt=s.target?Math.round(s.target/totalDays):0;
@@ -2478,108 +2461,49 @@ function openDrill(code){
       '<th style="padding:8px 14px;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid var(--border);min-width:120px;">Progress</th>'+
     '</tr></thead><tbody>'+kpiRows+'</tbody></table></div>';
 
-  // Day-wise rows (with last-FY same-day sales shown before this year's)
-  var ds=s.daySales||[];
-  var lyDay=(L2L_DATA&&L2L_DATA[activeSheet]&&L2L_DATA[activeSheet][(code||'').toUpperCase()])||[];
-  var maxDay=Math.max.apply(null,ds.concat([dTgt||1]));
+  // Day-wise KPI rows — this year vs last FY (LY: sales + walk-ins only)
+  var ds=s.daySales||[],db=s.dayBills||[],dw=s.dayWalkIns||[],dq=s.dayQty||[];
+  var cu=(code||'').toUpperCase();
+  var lyDay=(L2L_DATA&&L2L_DATA[activeSheet]&&L2L_DATA[activeSheet][cu])||[];
+  var lyWlk=(WLY_DATA&&WLY_DATA[activeSheet]&&WLY_DATA[activeSheet][cu])||[];
+  var hasW=!!s.dayWalkIns,hasQ=!!s.dayQty;
+  var T={s:0,ls:0,b:0,w:0,lw:0,q:0,lsE:0,lwE:0};
+  var tdS='padding:4px 8px;text-align:right;font-size:11px;font-family:monospace;border-bottom:1px solid var(--border);white-space:nowrap;';
+  function gr(ty,ly){if(!ly||!ty)return'<td style="'+tdS+'color:var(--text3);">—</td>';var g=Math.round((ty-ly)/ly*100);return'<td style="'+tdS+'font-weight:600;color:'+(g>=0?'var(--green)':'var(--red)')+';">'+(g>=0?'+':'')+g+'%</td>';}
   var dayRows=ds.map(function(v,i){
     var lbl=labels[i]||('D'+(i+1));
+    var b=db[i]||0,w=dw[i]||0,q=dq[i]||0,lv=lyDay[i]||0,lw=lyWlk[i]||0;
     var p=dTgt&&v?Math.round(v/dTgt*100):0;
-    var bw=maxDay>0?Math.round(Math.abs(v||0)/maxDay*100):0;
     var col=v?p>=100?'var(--green)':p>=85?'var(--amber)':'var(--red)':'var(--text3)';
-    var lv=lyDay[i]||0;
+    T.s+=v||0;T.b+=b;T.w+=w;T.q+=q;T.ls+=lv;T.lw+=lw;if(v){T.lsE+=lv;T.lwE+=lw;}
+    var cv=w?Math.round(b/w*1000)/10:null,abv=b?Math.round((v||0)/b):null,upt=b&&q?Math.round(q/b*100)/100:null;
+    var cvc=cv==null||!kt.conversion?'':(cv>=kt.conversion?'color:var(--green);':'color:var(--red);');
     return '<tr>'+
-      '<td style="padding:4px 10px;font-size:11px;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border);">'+lbl+'</td>'+
-      '<td style="padding:4px 10px;text-align:right;font-size:11px;font-family:monospace;color:var(--text3);border-bottom:1px solid var(--border);white-space:nowrap;">'+(lv?Lm(lv):'—')+'</td>'+
-      '<td style="padding:4px 10px;text-align:right;font-size:11px;font-family:monospace;color:'+col+';font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap;">'+(v?Lm(v):'—')+'</td>'+
-      '<td style="padding:4px 8px;text-align:right;font-size:10px;color:'+col+';border-bottom:1px solid var(--border);">'+(v?p+'%':'')+'</td>'+
-      '<td style="padding:4px 10px;border-bottom:1px solid var(--border);width:70px;">'+
-        '<div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;">'+
-          '<div style="width:'+Math.min(bw,100)+'%;height:100%;background:'+col+';border-radius:3px;"></div>'+
-        '</div>'+
-      '</td>'+
+      '<td style="padding:4px 8px;font-size:11px;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border);">'+lbl+'</td>'+
+      '<td style="'+tdS+'color:var(--text3);">'+(lv?Lm(lv):'—')+'</td>'+
+      '<td style="'+tdS+'color:'+col+';font-weight:600;">'+(v?Lm(v):'—')+'</td>'+gr(v,lv)+
+      '<td style="'+tdS+'color:'+col+';font-size:10px;">'+(v?p+'%':'')+'</td>'+
+      (hasW?'<td style="'+tdS+'color:var(--text3);">'+(lw||'—')+'</td><td style="'+tdS+'">'+(w||'—')+'</td>'+gr(w,lw):'')+
+      '<td style="'+tdS+'">'+(b||'—')+'</td>'+
+      (hasW?'<td style="'+tdS+cvc+'">'+(cv==null?'—':cv+'%')+'</td>':'')+
+      '<td style="'+tdS+'">'+(abv?LA(abv):'—')+'</td>'+
+      (hasQ?'<td style="'+tdS+'">'+(upt==null?'—':upt.toFixed(2))+'</td>':'')+
     '</tr>';
   }).join('');
-
-  // Category insights
-  var catColors=['#7c3aed','#2563eb','#16a34a','#d97706','#dc2626','#0891b2','#be185d','#854d0e'];
-  var occIcons={Bridal:'👰',Celebration:'🎉',Everyday:'👗',Wedding:'💍',Gifting:'🎁',Festival:'🪔',UNKNOWN:'❓'};
-  var srcIcons={'DIRECT WALKINS':'🚶','ONLINE ADS':'📱',INSTAGRAM:'📸',FACEBOOK:'👍',REFERRAL:'🤝',WHATSAPP:'💬',UNKNOWN:'❓'};
-
-  function insightBlock(title,icon,arr,colorFn,labelFn){
-    if(!arr||!arr.length) return '';
-    var maxV=arr[0].sales||1;
-    var rows=arr.slice(0,6).map(function(item,i){
-      var col=colorFn?colorFn(item.name,i):catColors[i%catColors.length];
-      var ic=labelFn?labelFn(item.name):'';
-      var bw=Math.min(Math.round((item.sales||0)/maxV*100),100);
-      return '<tr>'+
-        (ic?'<td style="padding:4px 8px;font-size:13px;border-bottom:1px solid var(--border);">'+ic+'</td>':'<td style="padding:4px 8px;border-bottom:1px solid var(--border);"><span style="width:8px;height:8px;background:'+col+';border-radius:50%;display:inline-block;"></span></td>')+
-        '<td style="padding:4px 10px;font-size:11px;font-weight:700;color:'+col+';max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-bottom:1px solid var(--border);">'+item.name+'</td>'+
-        '<td style="padding:4px 10px;text-align:right;font-size:11px;font-family:monospace;font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap;">'+Lm(item.sales||0)+'</td>'+
-        '<td style="padding:4px 8px;text-align:right;font-size:10px;color:var(--text3);border-bottom:1px solid var(--border);">'+(item.pct||0)+'%</td>'+
-        '<td style="padding:4px 10px;border-bottom:1px solid var(--border);width:60px;">'+
-          '<div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;">'+
-            '<div style="width:'+bw+'%;height:100%;background:'+col+';border-radius:3px;"></div>'+
-          '</div>'+
-        '</td>'+
-      '</tr>';
-    }).join('');
-    return '<div style="margin-bottom:14px;">'+
-      '<div style="font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:flex;align-items:center;gap:5px;">'+
-        '<span>'+icon+'</span> '+title+'</div>'+
-      '<div style="border:1px solid var(--border);border-radius:6px;overflow:hidden;">'+
-        '<table style="width:100%;border-collapse:collapse;">'+rows+'</table>'+
-      '</div></div>';
-  }
-
-  // Category rows - clickable
-  var catBlock = '';
-  if(cd&&cd.categories&&cd.categories.length){
-    window._popupCatNames2 = cd.categories.map(function(c){return c.name;});
-    var maxC = cd.categories[0].sales||1;
-    var catRows2 = cd.categories.slice(0,6).map(function(item,i){
-      var col=catColors[i%catColors.length];
-      var bw=Math.min(Math.round((item.sales||0)/maxC*100),100);
-      return '<tr data-ci="'+i+'" style="cursor:pointer;" onclick="showSubCatInPopup(window._popupCatNames2[parseInt(this.getAttribute(\'data-ci\'))])">'+
-        '<td style="padding:4px 8px;border-bottom:1px solid var(--border);"><span style="width:8px;height:8px;background:'+col+';border-radius:50%;display:inline-block;"></span></td>'+
-        '<td style="padding:4px 10px;font-size:11px;font-weight:700;color:'+col+';border-bottom:1px solid var(--border);white-space:nowrap;">🔍 '+item.name+'</td>'+
-        '<td style="padding:4px 10px;text-align:right;font-size:11px;font-family:monospace;font-weight:600;border-bottom:1px solid var(--border);">'+Lm(item.sales||0)+'</td>'+
-        '<td style="padding:4px 8px;text-align:right;font-size:10px;color:var(--text3);border-bottom:1px solid var(--border);">'+(item.pct||0)+'%</td>'+
-        '<td style="padding:4px 10px;border-bottom:1px solid var(--border);width:60px;">'+
-          '<div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden;">'+
-            '<div style="width:'+bw+'%;height:100%;background:'+col+';border-radius:3px;"></div>'+
-          '</div>'+
-        '</td>'+
-      '</tr>';
-    }).join('');
-    catBlock = '<div style="margin-bottom:14px;">'+
-      '<div style="font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:flex;align-items:center;gap:5px;">'+
-        '<span>📦</span> Main Category <span style="font-size:9px;color:var(--primary);font-weight:400;text-transform:none;letter-spacing:0;">(click to see sub-categories)</span></div>'+
-      '<div style="border:1px solid var(--border);border-radius:6px;overflow:hidden;">'+
-        '<table style="width:100%;border-collapse:collapse;">'+catRows2+'</table>'+
-      '</div></div>';
-  }
-
-  var insightsHTML = '';
-  if(cd){
-    insightsHTML =
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">'+
-        '<div>'+
-          catBlock+
-          insightBlock('Occasion / Purpose','🎯',cd.occasions,null,function(n){return occIcons[n]||'📦';})+
-          insightBlock('Salesperson Sales','👤',cd.salespersons,null,null)+
-        '</div>'+
-        '<div id="popup-subcat-col">'+
-          insightBlock('Product Type','🏷️',cd.productTypes,null,null)+
-          insightBlock('Traffic Source','📡',cd.sources,null,function(n){return srcIcons[n]||'📡';})+
-        '</div>'+
-      '</div>';
-  } else {
-    insightsHTML='<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px;background:var(--surface2);border-radius:6px;">'+
-      (catData?'💎 No category match for this store. Check store code/name alignment.':'Load 💎 Category tab first to see item-level insights.')+
-    '</div>';
-  }
+  var thS='padding:6px 8px;font-size:9px;text-align:right;color:var(--text2);border-bottom:2px solid var(--border);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;';
+  var dayHead='<tr style="background:var(--surface2);position:sticky;top:0;z-index:1;">'+
+    '<th style="'+thS+'text-align:left;">Day</th><th style="'+thS+'">Sales LY</th><th style="'+thS+'">Sales TY</th><th style="'+thS+'">Growth</th><th style="'+thS+'">% Day Tgt</th>'+
+    (hasW?'<th style="'+thS+'">W-ins LY</th><th style="'+thS+'">W-ins TY</th><th style="'+thS+'">Growth</th>':'')+
+    '<th style="'+thS+'">Bills</th>'+(hasW?'<th style="'+thS+'">Conv%</th>':'')+'<th style="'+thS+'">ABV</th>'+(hasQ?'<th style="'+thS+'">UPT</th>':'')+'</tr>';
+  var tfS='padding:6px 8px;text-align:right;font-size:11px;font-family:monospace;border-top:2px solid var(--border);white-space:nowrap;';
+  var tCv=T.w?Math.round(T.b/T.w*1000)/10:null,tAbv=T.b?Math.round(T.s/T.b):null,tUpt=T.b&&T.q?Math.round(T.q/T.b*100)/100:null;
+  function gf(ty,ly){if(!ly||!ty)return'<td style="'+tfS+'">—</td>';var g=Math.round((ty-ly)/ly*100);return'<td style="'+tfS+'color:'+(g>=0?'var(--green)':'var(--red)')+';">'+(g>=0?'+':'')+g+'%</td>';}
+  var dayFoot='<tr style="background:var(--surface2);font-weight:700;">'+
+    '<td style="'+tfS+'text-align:left;font-family:inherit;">MTD</td>'+
+    '<td style="'+tfS+'color:var(--text3);">'+Lm(T.lsE)+'</td><td style="'+tfS+'color:'+pcc(ap)+';">'+Lm(T.s)+'</td>'+gf(T.s,T.lsE)+'<td style="'+tfS+'color:'+pcc(ap)+';">'+ap+'%</td>'+
+    (hasW?'<td style="'+tfS+'color:var(--text3);">'+Nm(T.lwE)+'</td><td style="'+tfS+'">'+Nm(T.w)+'</td>'+gf(T.w,T.lwE):'')+
+    '<td style="'+tfS+'">'+Nm(T.b)+'</td>'+(hasW?'<td style="'+tfS+'">'+(tCv==null?'—':tCv+'%')+'</td>':'')+
+    '<td style="'+tfS+'">'+(tAbv?LA(tAbv):'—')+'</td>'+(hasQ?'<td style="'+tfS+'">'+(tUpt==null?'—':tUpt.toFixed(2))+'</td>':'')+'</tr>';
 
   // Build modal
   var existing=document.getElementById('store-modal');if(existing)existing.remove();
@@ -2633,39 +2557,12 @@ function openDrill(code){
     // ── KPI Table ──
     kpiHTML+
 
-    // ── Two column layout ──
-    '<div style="display:grid;grid-template-columns:minmax(320px,360px) 1fr;gap:16px;margin-top:4px;">'+
-
-      // Left: Day-wise
-      '<div>'+
-        '<div style="font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;align-items:center;gap:5px;">📅 Day-wise Sales</div>'+
-        '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:400px;overflow-y:auto;">'+
-          '<table style="width:100%;border-collapse:collapse;">'+
-          '<thead><tr style="background:var(--surface2);position:sticky;top:0;z-index:1;">'+
-            '<th style="padding:6px 10px;font-size:9px;text-align:left;color:var(--text2);border-bottom:2px solid var(--border);text-transform:uppercase;letter-spacing:.05em;">Day</th>'+
-            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text2);border-bottom:2px solid var(--border);text-transform:uppercase;letter-spacing:.05em;">Last Yr</th>'+
-            '<th style="padding:6px 10px;font-size:9px;text-align:right;color:var(--text2);border-bottom:2px solid var(--border);text-transform:uppercase;letter-spacing:.05em;">Sales</th>'+
-            '<th style="padding:6px 6px;font-size:9px;text-align:right;color:var(--text2);border-bottom:2px solid var(--border);text-transform:uppercase;letter-spacing:.05em;">%</th>'+
-            '<th style="padding:6px 8px;font-size:9px;color:var(--text2);border-bottom:2px solid var(--border);text-transform:uppercase;letter-spacing:.05em;">Bar</th>'+
-          '</tr></thead>'+
-          '<tbody>'+dayRows+'</tbody>'+
-          '<tfoot><tr style="background:var(--surface2);font-weight:700;">'+
-            '<td style="padding:6px 10px;font-size:11px;border-top:2px solid var(--border);">MTD</td>'+
-            '<td style="padding:6px 10px;text-align:right;font-size:11px;font-family:monospace;color:var(--text3);border-top:2px solid var(--border);">'+Lm(lyDay.slice(0,ds.length).reduce(function(a,b){return a+(b||0);},0))+'</td>'+
-            '<td style="padding:6px 10px;text-align:right;font-size:11px;font-family:monospace;color:'+pcc(ap)+';border-top:2px solid var(--border);">'+Lm(s.mtdSales)+'</td>'+
-            '<td style="padding:6px 6px;text-align:right;font-size:11px;color:'+pcc(ap)+';border-top:2px solid var(--border);">'+ap+'%</td>'+
-            '<td style="border-top:2px solid var(--border);"></td>'+
-          '</tr></tfoot>'+
-          '</table>'+
-        '</div>'+
-      '</div>'+
-
-      // Right: Category insights
-      '<div>'+
-        '<div style="font-size:10px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;gap:5px;">💎 Item-level Insights</div>'+
-        insightsHTML+
-      '</div>'+
-
+    // ── Day-wise KPIs (TY vs LY) ──
+    '<div style="font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin:4px 0 8px;display:flex;align-items:center;gap:5px;">📅 Day-wise KPIs — This Year vs Last Year <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);">(MTD LY = same days as TY)</span></div>'+
+    '<div style="border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:460px;">'+
+      '<table style="width:100%;border-collapse:collapse;">'+
+      '<thead>'+dayHead+'</thead><tbody>'+dayRows+'</tbody><tfoot>'+dayFoot+'</tfoot>'+
+      '</table>'+
     '</div>'+
     '</div>'; // end padding
 
@@ -2678,39 +2575,6 @@ function openDrill(code){
 }
 
 
-// Sub-category in popup
-function showSubCatInPopup(catName){
-  var cd=window._popupCd;if(!cd)return;
-  var catColors=['#7c3aed','#2563eb','#16a34a','#d97706','#dc2626','#0891b2','#be185d','#854d0e'];
-  function Lm(n){var a=Math.abs(n);return a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(2)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
-  var subs=(cd.subCategories||[]).filter(function(sc){return sc.name.indexOf(catName+'›')===0;}).map(function(sc){return{name:sc.name.replace(catName+'›',''),sales:sc.sales,pct:sc.pct};}).sort(function(a,b){return b.sales-a.sales;});
-  var el=document.getElementById('popup-subcat-col');if(!el)return;
-  var maxV=subs.length?subs[0].sales:1;
-  el.innerHTML='<div style="font-size:10px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.04em;margin:8px 0 5px;">🏷️ '+catName+' <button onclick="resetSubCatView()" style="font-size:10px;background:#f3f4f6;border:none;border-radius:4px;padding:1px 6px;cursor:pointer;margin-left:4px;">↩</button></div>'+
-    (subs.length?subs.map(function(item,i){
-      var bw=maxV?Math.min(Math.round(item.sales/maxV*70),70):0;var col=catColors[i%catColors.length];
-      return'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #f9fafb;">'+
-        '<div style="flex:1;font-size:11px;font-weight:600;color:'+col+';">'+item.name+'</div>'+
-        '<div style="font-size:10px;font-family:monospace;min-width:50px;text-align:right;">'+Lm(item.sales)+'</div>'+
-        '<div style="font-size:10px;color:#9ca3af;min-width:26px;text-align:right;">'+(item.pct||'')+'%</div>'+
-        '<div style="width:'+bw+'px;height:5px;background:'+col+';border-radius:3px;flex-shrink:0;"></div>'+
-      '</div>';
-    }).join(''):'<div style="color:#9ca3af;font-size:11px;padding:6px 0;">No item detail available</div>');
-}
-function resetSubCatView(){
-  var cd=window._popupCd;if(!cd)return;
-  var catColors=['#7c3aed','#2563eb','#16a34a','#d97706','#dc2626','#0891b2','#be185d','#854d0e'];
-  function Lm(n){var a=Math.abs(n);return a>=1e5?'₹'+(n/1e5).toFixed(1)+'L':a>=1e3?'₹'+(n/1e3).toFixed(2)+'K':'₹'+Math.round(n).toLocaleString('en-IN');}
-  var el=document.getElementById('popup-subcat-col');if(!el)return;
-  var arr=cd.productTypes||[];var maxV=arr.length?arr[0].sales:1;
-  el.innerHTML='<div style="font-size:10px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.04em;margin:8px 0 5px;">🏷️ Product Type</div>'+
-    arr.slice(0,6).map(function(item,i){var bw=maxV?Math.min(Math.round(item.sales/maxV*70),70):0;var col=catColors[i%catColors.length];
-      return'<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #f9fafb;">'+
-        '<div style="flex:1;font-size:11px;font-weight:600;color:'+col+';">'+item.name+'</div>'+
-        '<div style="font-size:10px;font-family:monospace;min-width:50px;text-align:right;">'+Lm(item.sales)+'</div>'+
-        '<div style="font-size:10px;color:#9ca3af;min-width:26px;text-align:right;">'+item.pct+'%</div>'+
-        '<div style="width:'+bw+'px;height:5px;background:'+col+';border-radius:3px;flex-shrink:0;"></div></div>';}).join('');
-}
 
 // ═══════════════════════════════════════════
 // CATEGORY TAB
