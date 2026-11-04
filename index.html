@@ -325,7 +325,7 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <div class="tab" onclick="showTab('mtd',this)">&#128202; MTD</div>
   <div class="tab" onclick="showTab('weekly',this)">&#128198; Weekly</div>
   <div class="tab" onclick="showTab('l2l',this)">&#128200; L2L</div>
-  <div class="tab" onclick="showTab('lr',this)">&#128202; Loss Reason Analysis</div>
+  <div class="tab" onclick="showTab('lr',this)">&#128202; Loss of Sale</div>
     <div class="tab" onclick="showTab('ytd',this)">&#128337; YTD</div>
 <div class="tab warn" onclick="showTab('kpialerts',this)">&#9888; KPI Alerts</div>
   <div class="tab danger" onclick="showTab('audit',this)">&#128270; Audit</div>
@@ -448,19 +448,33 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
   <div class="tw"><table id="t-l2l"><thead id="l2l-thead"></thead><tbody id="b-l2l"></tbody></table></div>
 </div>
 
-<!-- LOSS REASON ANALYSIS (lost-enquiry log, Karnataka & Kerala only) -->
+<!-- LOSS OF SALE (live from the Loss-of-Sale sheet, Karnataka & Kerala only) -->
 <div class="panel" id="panel-lr">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
+    <input id="loss-url" type="text" placeholder="Paste Loss-of-Sale sheet script URL and press Connect…"
+      style="flex:1;min-width:220px;padding:7px 12px;border:1.5px solid var(--border2);border-radius:6px;font-size:11px;font-family:monospace;background:var(--surface2);color:var(--text);"
+      onkeydown="if(event.key==='Enter')lossConnect()">
+    <button class="tbtn tbtn-blue" onclick="lossConnect()">&#9654; Connect</button>
+    <button class="wkbtn" onclick="lossReload()" title="Re-read the sheet now">&#8635; Refresh</button>
+  </div>
+  <div id="lr-src" style="font-size:11px;color:var(--text2);margin-bottom:10px;"></div>
   <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
-    <span style="font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Analyse by:</span>
-    <button id="lr-reason" class="wkbtn active" onclick="setLossDim('reason')">Reason</button>
+    <span style="font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">View:</span>
+    <button id="lr-store" class="wkbtn active" onclick="setLossDim('store')">Store-wise</button>
+    <button id="lr-matrix" class="wkbtn" onclick="setLossDim('matrix')">Store &#215; Reason</button>
+    <button id="lr-reason" class="wkbtn" onclick="setLossDim('reason')">Reason</button>
     <button id="lr-sub" class="wkbtn" onclick="setLossDim('sub')">Sub-reason</button>
     <button id="lr-cat" class="wkbtn" onclick="setLossDim('cat')">Category</button>
-    <button id="lr-store" class="wkbtn" onclick="setLossDim('store')">By Store</button>
+    <button id="lr-remarks" class="wkbtn" onclick="setLossDim('remarks')">Remarks</button>
+    <div id="lr-qwrap" style="display:none;align-items:center;gap:6px;">
+      <input id="lr-q" type="search" placeholder="Search store, reason, notes…" oninput="lossSearch(this.value)"
+        style="padding:6px 10px;border:1.5px solid var(--border2);border-radius:6px;font-size:12px;background:var(--surface2);color:var(--text);min-width:200px;">
+    </div>
     <div style="flex:1"></div>
-    <button class="dl" onclick="dlT('t-lr','LossReasonAnalysis')">&#8595; CSV</button>
+    <button class="dl" onclick="lossCSV()">&#8595; CSV</button>
   </div>
   <div class="krow" id="lr-cards"></div>
-  <div class="sh"><span class="sh-t" id="lr-title">Loss Reason Analysis</span><div class="sh-l"></div></div>
+  <div class="sh"><span class="sh-t" id="lr-title">Loss of Sale</span><div class="sh-l"></div></div>
   <div class="tw"><table id="t-lr"><thead id="lr-thead"></thead><tbody id="b-lr"></tbody></table></div>
 </div>
 
@@ -2056,107 +2070,275 @@ function renderL2L(){
 }
 
 // ═══════════════════════════════════════════
-// LOSS REASON ANALYSIS — lost-enquiry log (Karnataka & Kerala stores only)
+// LOSS OF SALE — live from the "Loss of sale" Google Sheet (Karnataka & Kerala stores only)
 // ═══════════════════════════════════════════
-// Drill: clicking a Reason/Sub-reason/Category shows which stores drove it
-function openLossDrill(idx){
-  var rows=window._lrRows||[],dim=window._lrDim,months=window._lrMonths||[activeSheet];
-  var row=rows[idx];if(!row)return;
-  var value=row.k,scope=lossScope();
-  var per=[];
-  Object.keys(scope).forEach(function(code){
-    var cnt=0;months.forEach(function(m){var d=LOSS_DATA&&LOSS_DATA[m]&&LOSS_DATA[m][code];if(d&&d[dim]&&d[dim][value])cnt+=d[dim][value];});
-    if(cnt>0){var s=scope[code];per.push({code:code,rm:s.rm,cm:s.cm,market:mkt(s),v:cnt});}
+// Source: the Loss-of-Sale sheet reader web app (URL saved per browser in localStorage
+// 'ka_loss_url', never hard-coded here because that endpoint also returns customer
+// names and mobile numbers). Only non-personal fields are kept in the dashboard:
+// date, store, timing, employee, reason, sub-reason, category, sub-category,
+// customer notes, associate notes, occasion, follow-up.
+// APR/MAY/JUN fall back to the static loss_map.json when the live link isn't set.
+var LOSS_LIVE={};      // month -> {tab, entries:[...], last:'YYYY-MM-DD', none:bool}
+var LOSS_BUSY={};      // month -> true while fetching
+var LOSS_ERR={};       // month -> error text
+var LOSS_TABS=null;    // [tab names] from ?list=tabs
+var LOSS_DIM='store';
+var LOSS_Q='';
+var LOSS_MAX_ROWS=1500;
+function lossURL(){try{return (localStorage.getItem('ka_loss_url')||'').trim();}catch(e){return '';}}
+function lossEsc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function lossCnt(n){return (n||0).toLocaleString('en-IN');}
+function lossMonths(){return (selMonths&&selMonths.length)?selMonths:[activeSheet];}
+function lossPeriod(){var ms=lossMonths();return ms.length>1?ms.join('+'):ms[0];}
+function lossConnect(){
+  var inp=document.getElementById('loss-url');var u=inp?inp.value.trim():'';
+  try{if(u)localStorage.setItem('ka_loss_url',u);else localStorage.removeItem('ka_loss_url');}catch(e){}
+  LOSS_LIVE={};LOSS_BUSY={};LOSS_ERR={};LOSS_TABS=null;
+  lossEnsure();renderLossReason();
+}
+function lossReload(){LOSS_LIVE={};LOSS_ERR={};LOSS_TABS=null;lossEnsure();renderLossReason();}
+// store-name ("BLR - HSR LAYOUT") -> code, from every month the dashboard has loaded
+function lossNameMap(){
+  var map={},lists=[raw||[]];Object.keys(monthCache||{}).forEach(function(m){lists.push(monthCache[m]||[]);});
+  lists.forEach(function(arr){arr.forEach(function(s){if(!s||!s.code)return;var n=(s.name||'').replace(/\s*\([^)]*\)\s*$/,'').trim().toUpperCase();if(n)map[n]=s.code.toUpperCase();map[s.code.toUpperCase()]=s.code.toUpperCase();});});
+  return map;
+}
+function lossTabFor(m){
+  if(!LOSS_TABS)return null;
+  var hit=null;LOSS_TABS.forEach(function(n){var l=n.toLowerCase().replace(/\s+/g,' ').trim();
+    if(l.indexOf('loss of sale data ')!==0)return;var suf=l.slice(18).trim().slice(0,3).toUpperCase();if(suf===m&&!hit)hit=n;});
+  return hit;
+}
+function lossISO(v){
+  if(v==null||v==='')return '';
+  var d=new Date(v);if(isNaN(d))return '';
+  d=new Date(d.getTime()+19800000);   // sheet dates arrive as IST midnight in UTC
+  return d.toISOString().slice(0,10);
+}
+function lossFetchJSON(url){return fetch(url).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});}
+function lossEnsure(){
+  var url=lossURL();if(!url)return;
+  var panel=document.getElementById('panel-lr');if(!panel||!panel.classList.contains('active'))return;   // only fetch when the tab is open
+  var need=lossMonths().filter(function(m){return !LOSS_LIVE[m]&&!LOSS_BUSY[m]&&!LOSS_ERR[m];});
+  if(!need.length)return;
+  need.forEach(function(m){LOSS_BUSY[m]=true;});
+  var tabsP=LOSS_TABS?Promise.resolve():lossFetchJSON(url+'?list=tabs').then(function(d){LOSS_TABS=((d&&d.tabs)||[]).map(function(t){return t.name||t;});});
+  tabsP.then(function(){
+    need.forEach(function(m){
+      var tab=lossTabFor(m);
+      if(!tab){LOSS_BUSY[m]=false;LOSS_LIVE[m]={none:true,entries:[]};renderLossReason();return;}
+      lossFetchJSON(url+'?sheet='+encodeURIComponent(tab)).then(function(d){
+        var H=((d&&d.headers)||[]).map(function(h){return String(h).trim().toLowerCase();});
+        function col(names,def){for(var i=0;i<names.length;i++){var k=H.indexOf(names[i]);if(k>=0)return k;}return def;}
+        var C={dt:col(['date'],4),st:col(['store'],5),tm:col(['timing'],7),emp:col(['employee'],8),r:col(['reason for lost sale','reason'],9),s:col(['sub reason','sub-reason'],10),
+               cat:col(['category'],11),cn:col(['customer notes'],12),sc:col(['sub category','sub-category'],13),an:col(['associate notes'],19),occ:col(['occasion'],20),fu:col(['follow up','follow-up'],21),bt:col(['bill type'],0)};
+        var map=lossNameMap(),ym=FY_YM[m],pre=ym?(ym[0]+'-'+(ym[1]<10?'0':'')+ym[1]):'';
+        var out=[],last='';
+        ((d&&d.rows)||[]).forEach(function(r){
+          var code=map[String(r[C.st]||'').trim().toUpperCase()];if(!code)return;   // KA & KL dashboard stores only
+          var dt=lossISO(r[C.dt]);if(pre&&dt&&dt.slice(0,7)!==pre)return;          // keep this month's rows
+          function g(i){var v=r[i];return v==null?'':String(v).trim();}
+          out.push({d:dt,c:code,tm:g(C.tm),emp:g(C.emp),r:g(C.r)||'Blank',s:g(C.s)||'Blank',cat:g(C.cat)||'Blank',sc:g(C.sc),cn:g(C.cn),an:g(C.an),occ:g(C.occ),fu:g(C.fu),bt:g(C.bt)});
+          if(dt>last)last=dt;
+        });
+        LOSS_LIVE[m]={tab:tab,entries:out,last:last};LOSS_BUSY[m]=false;renderLossReason();
+      }).catch(function(e){LOSS_BUSY[m]=false;LOSS_ERR[m]=String(e&&e.message||e);renderLossReason();});
+    });
+  }).catch(function(e){need.forEach(function(m){LOSS_BUSY[m]=false;LOSS_ERR[m]='Could not list sheet tabs — '+(e&&e.message||e);});renderLossReason();});
+}
+// codes currently in scope (respects RM/CM/Market/Type/Store filters), and their store objects
+function lossScope(){var by={};ovStores().forEach(function(s){by[(s.code||'').toUpperCase()]=s;});return by;}
+function lossInRange(iso){if(!rangeActive()||!iso)return true;var n=strNum(iso),f=strNum(dateFrom),t=strNum(dateTo);if(f!=null&&n<f)return false;if(t!=null&&n>t)return false;return true;}
+// Unified per-store aggregate for the selected months: live entries when present, else static file
+function lossAgg(){
+  var scope=lossScope(),by={},entries=[],src={live:[],stat:[],none:[],busy:[],err:[]},last='';
+  function slot(code){return by[code]||(by[code]={total:0,reason:{},sub:{},cat:{},rs:{}});}
+  lossMonths().forEach(function(m){
+    var L=LOSS_LIVE[m];
+    if(L&&!L.none){src.live.push(m);if(L.last>last)last=L.last;
+      L.entries.forEach(function(e){if(!scope[e.c]||!lossInRange(e.d))return;var o=slot(e.c);o.total++;
+        o.reason[e.r]=(o.reason[e.r]||0)+1;o.sub[e.s]=(o.sub[e.s]||0)+1;o.cat[e.cat]=(o.cat[e.cat]||0)+1;var k=e.r+'\u0001'+e.s;o.rs[k]=(o.rs[k]||0)+1;entries.push(e);});
+      return;}
+    var md=LOSS_DATA&&LOSS_DATA[m];
+    if(md&&!LOSS_BUSY[m]){src.stat.push(m);
+      Object.keys(scope).forEach(function(code){var d=md[code];if(!d)return;var o=slot(code);o.total+=d.total;
+        ['reason','sub','cat'].forEach(function(k){var x=d[k]||{};Object.keys(x).forEach(function(v){o[k][v]=(o[k][v]||0)+x[v];});});});
+      return;}
+    if(LOSS_BUSY[m])src.busy.push(m);else if(LOSS_ERR[m])src.err.push(m);else src.none.push(m);
   });
-  per.sort(function(a,b){return b.v-a.v;});
-  var total=per.reduce(function(a,r){return a+r.v;},0),max=per.length?per[0].v:1;
-  var DIMLBL={reason:'Reason',sub:'Sub-reason',cat:'Category'}[dim]||dim;
-  var existing=document.getElementById('lossdrill-modal');if(existing)existing.remove();
+  return {scope:scope,by:by,entries:entries,src:src,last:last};
+}
+function lossTop(o){var k=Object.keys(o||{}).sort(function(a,b){return o[b]-o[a];})[0];return k||'—';}
+function lossShare(o,k,tot){return tot&&o&&o[k]?Math.round(o[k]/tot*100)+'%':'';}
+function setLossDim(d){
+  LOSS_DIM=d;
+  ['store','matrix','reason','sub','cat','remarks'].forEach(function(k){var b=document.getElementById('lr-'+k);if(b)b.classList.toggle('active',k===d);});
+  var q=document.getElementById('lr-qwrap');if(q)q.style.display=(d==='remarks')?'flex':'none';
+  renderLossReason();
+}
+function lossSearch(v){LOSS_Q=(v||'').trim().toLowerCase();if(LOSS_DIM==='remarks')renderLossReason();}
+function lossStatus(A){
+  var s=A.src,bits=[];
+  if(s.live.length)bits.push('Live sheet: '+s.live.join(', ')+(A.last?' (entries up to '+A.last.slice(8)+'-'+['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+A.last.slice(5,7)]+')':''));
+  if(s.stat.length)bits.push('Saved file: '+s.stat.join(', '));
+  if(s.busy.length)bits.push('Loading '+s.busy.join(', ')+'… (a full month can take ~20–30 s)');
+  if(s.err.length)bits.push('Failed: '+s.err.map(function(m){return m+' ('+LOSS_ERR[m]+')';}).join('; '));
+  if(s.none.length)bits.push((lossURL()?'No loss tab for ':'Not connected — no data for ')+s.none.join(', '));
+  return bits.join(' · ');
+}
+function renderLossReason(){
+  var body=document.getElementById('b-lr');if(!body)return;
+  lossEnsure();
+  var inp=document.getElementById('loss-url');if(inp&&!inp.value&&lossURL())inp.value=lossURL();
+  var A=lossAgg(),by=A.by,scope=A.scope,period=lossPeriod();
+  var st=document.getElementById('lr-src');if(st)st.textContent=lossStatus(A);
+  var codes=Object.keys(by).filter(function(c){return by[c].total>0;});
+  var grand=codes.reduce(function(a,c){return a+by[c].total;},0);
+  var allR={},allS={};codes.forEach(function(c){var o=by[c];Object.keys(o.reason).forEach(function(k){allR[k]=(allR[k]||0)+o.reason[k];});Object.keys(o.sub).forEach(function(k){allS[k]=(allS[k]||0)+o.sub[k];});});
+  var wiTot=0;codes.forEach(function(c){var s=scope[c];if(s&&s.mtdWalkIns)wiTot+=s.mtdWalkIns;});
+  // cards
+  var cards=document.getElementById('lr-cards');
+  if(cards){
+    function kc(l,v,sub,cls){return '<div class="kc"><div class="kl">'+l+'</div><div class="kv'+(cls?' '+cls:'')+'">'+v+'</div><div class="ks">'+(sub||'')+'</div></div>';}
+    var tr=lossTop(allR),ts=lossTop(allS);
+    cards.innerHTML=
+      kc('Loss entries',lossCnt(grand),period+' · KA & KL','red')+
+      kc('Stores reporting',codes.length+' / '+Object.keys(scope).length,'stores with ≥1 entry')+
+      kc('Per 100 walk-ins',wiTot&&grand?(grand/wiTot*100).toFixed(1):'—','entries ÷ walk-ins × 100')+
+      kc('Top reason',lossEsc(tr),lossShare(allR,tr,grand)+(allR[tr]?' · '+lossCnt(allR[tr]):''))+
+      kc('Top sub-reason',lossEsc(ts),lossShare(allS,ts,grand)+(allS[ts]?' · '+lossCnt(allS[ts]):''));
+  }
+  var DIMLBL={store:'Store',matrix:'Store × Reason',reason:'Reason',sub:'Sub-reason',cat:'Category',remarks:'Remarks'}[LOSS_DIM];
+  document.getElementById('lr-title').textContent='Loss of Sale — '+DIMLBL+' · '+period+(rangeActive()?' · '+rangeLabel():'')+' · Karnataka & Kerala';
+  var th=document.getElementById('lr-thead');
+  function bar(v,max){var w=max?Math.round(v/max*100):0;return '<td style="min-width:90px;"><div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;"><div style="width:'+w+'%;height:100%;background:#dc2626;border-radius:4px;"></div></div></td>';}
+  var empty=function(n,msg){return '<tr><td colspan="'+n+'" style="text-align:center;color:#9ca3af;padding:18px;">'+msg+'</td></tr>';};
+  var noMsg=A.src.busy.length?'Loading loss-of-sale entries…':(lossURL()?'No loss entries for this selection.':'No loss data for this month. Paste the Loss-of-Sale sheet link above and press Connect.');
+  window._lrMonths=lossMonths();
+  if(LOSS_DIM==='store'){
+    th.innerHTML='<tr><th onclick="srt(\'t-lr\',0)">Store</th><th onclick="srt(\'t-lr\',1)">Name</th><th onclick="srt(\'t-lr\',2)">RM</th><th onclick="srt(\'t-lr\',3)">CM</th><th class="r" onclick="srt(\'t-lr\',4)">Entries</th><th class="r" onclick="srt(\'t-lr\',5)">Walk-ins</th><th class="r" onclick="srt(\'t-lr\',6)">Per 100 WI</th><th onclick="srt(\'t-lr\',7)">Top reason</th><th onclick="srt(\'t-lr\',8)">Top sub-reason</th><th class="r" onclick="srt(\'t-lr\',9)">% of total</th><th>Share</th></tr>';
+    var list=Object.keys(scope).map(function(c){var s=scope[c],o=by[c]||{total:0,reason:{},sub:{}};return {c:c,s:s,o:o};});
+    list.sort(function(a,b){return b.o.total-a.o.total;});
+    var mx=list.length?list[0].o.total:1;
+    body.innerHTML=(grand?list.map(function(x){
+      var o=x.o,wi=x.s.mtdWalkIns||0,p100=wi&&o.total?(o.total/wi*100):null,tr=lossTop(o.reason),ts=lossTop(o.sub);
+      var low=p100!=null&&p100<6;
+      return '<tr style="cursor:pointer;" onclick="openLossStore(\''+x.c+'\')" title="Reasons, sub-reasons and remarks for this store"><td style="font-weight:700;color:#3b82f6;">'+x.c+'</td><td style="font-size:11px;">'+lossEsc((x.s.name||'').replace(/\s*\([^)]*\)\s*$/,''))+'</td><td>'+lossEsc(x.s.rm||'')+'</td><td>'+lossEsc(x.s.cm||'')+'</td>'+
+        '<td class="r" style="font-weight:700;color:'+(o.total?'#dc2626':'#9ca3af')+';">'+lossCnt(o.total)+'</td><td class="r">'+(wi?lossCnt(wi):'—')+'</td>'+
+        '<td class="r"'+(low?' style="color:#b26a00;font-weight:700;" title="Below 6 per 100 walk-ins — check recording"':'')+'>'+(p100==null?'—':p100.toFixed(1))+(low?' ⚠':'')+'</td>'+
+        '<td style="font-size:11px;">'+lossEsc(tr)+(o.total&&tr!=='—'?' <span style="color:#9ca3af;">'+lossShare(o.reason,tr,o.total)+'</span>':'')+'</td>'+
+        '<td style="font-size:11px;">'+lossEsc(ts)+(o.total&&ts!=='—'?' <span style="color:#9ca3af;">'+lossShare(o.sub,ts,o.total)+'</span>':'')+'</td>'+
+        '<td class="r">'+(grand?Math.round(o.total/grand*100):0)+'%</td>'+bar(o.total,mx)+'</tr>';
+    }).join('')+'<tr class="ft"><td colspan="4">Total ('+codes.length+' stores reporting)</td><td class="r" style="font-weight:700;color:#dc2626;">'+lossCnt(grand)+'</td><td class="r">'+(wiTot?lossCnt(wiTot):'—')+'</td><td class="r">'+(wiTot?(grand/wiTot*100).toFixed(1):'—')+'</td><td>'+lossEsc(lossTop(allR))+'</td><td>'+lossEsc(lossTop(allS))+'</td><td class="r">100%</td><td></td></tr>'
+      :empty(11,noMsg));
+    return;
+  }
+  if(LOSS_DIM==='matrix'){
+    var reasons=Object.keys(allR).sort(function(a,b){return allR[b]-allR[a];});
+    th.innerHTML='<tr><th onclick="srt(\'t-lr\',0)">Store</th><th onclick="srt(\'t-lr\',1)">RM</th>'+reasons.map(function(r,i){return '<th class="r" onclick="srt(\'t-lr\','+(i+2)+')" style="white-space:normal;min-width:80px;">'+lossEsc(r)+'</th>';}).join('')+'<th class="r" onclick="srt(\'t-lr\','+(reasons.length+2)+')">Total</th></tr>';
+    var rows=codes.slice().sort(function(a,b){return by[b].total-by[a].total;});
+    body.innerHTML=(rows.length?rows.map(function(c){var o=by[c],s=scope[c]||{};
+      return '<tr style="cursor:pointer;" onclick="openLossStore(\''+c+'\')"><td style="font-weight:700;color:#3b82f6;">'+c+'</td><td style="font-size:11px;">'+lossEsc(s.rm||'')+'</td>'+
+        reasons.map(function(r){var v=o.reason[r]||0,a=o.total?v/o.total:0;return '<td class="r" style="'+(v?'background:rgba(220,38,38,'+(0.08+a*0.5).toFixed(2)+');':'color:#9ca3af;')+'">'+(v?lossCnt(v):'·')+'</td>';}).join('')+
+        '<td class="r" style="font-weight:700;color:#dc2626;">'+lossCnt(o.total)+'</td></tr>';
+    }).join('')+'<tr class="ft"><td colspan="2">Total</td>'+reasons.map(function(r){return '<td class="r">'+lossCnt(allR[r])+'</td>';}).join('')+'<td class="r" style="font-weight:700;color:#dc2626;">'+lossCnt(grand)+'</td></tr>'
+      :empty(reasons.length+3,noMsg));
+    return;
+  }
+  if(LOSS_DIM==='remarks'){
+    th.innerHTML='<tr><th onclick="srt(\'t-lr\',0)">Date</th><th onclick="srt(\'t-lr\',1)">Store</th><th onclick="srt(\'t-lr\',2)">Reason</th><th onclick="srt(\'t-lr\',3)">Sub-reason</th><th onclick="srt(\'t-lr\',4)">Category</th><th onclick="srt(\'t-lr\',5)">Sub-category</th><th>Customer notes</th><th>Associate notes</th><th onclick="srt(\'t-lr\',8)">Employee</th><th onclick="srt(\'t-lr\',9)">Time</th></tr>';
+    var ents=lossFilterEntries(A.entries);
+    window._lrEntries=ents;
+    var shown=ents.slice(0,LOSS_MAX_ROWS);
+    var staticOnly=!A.src.live.length&&A.src.stat.length;
+    body.innerHTML=(shown.length?shown.map(lossEntryRow).join('')+
+      '<tr class="ft"><td colspan="10">'+lossCnt(ents.length)+' entries'+(ents.length>shown.length?' — showing first '+lossCnt(shown.length)+'; narrow with search or filters (CSV has all)':'')+'</td></tr>'
+      :empty(10,staticOnly?'Remarks need the live Loss-of-Sale link (the saved APR–JUN file has counts only).':(LOSS_Q?'No entries match “'+lossEsc(LOSS_Q)+'”.':noMsg)));
+    return;
+  }
+  // reason / sub / cat
+  var agg={};codes.forEach(function(c){var x=by[c][LOSS_DIM]||{};Object.keys(x).forEach(function(k){agg[k]=(agg[k]||0)+x[k];});});
+  var rws=Object.keys(agg).map(function(k){return {k:k,v:agg[k]};}).sort(function(a,b){return b.v-a.v;});
+  var max=rws.length?rws[0].v:1;
+  th.innerHTML='<tr><th onclick="srt(\'t-lr\',0)">'+DIMLBL+'</th><th class="r" onclick="srt(\'t-lr\',1)">Entries</th><th class="r" onclick="srt(\'t-lr\',2)">% of total</th><th onclick="srt(\'t-lr\',3)">Top store</th><th>Share</th></tr>';
+  window._lrRows=rws;window._lrDim=LOSS_DIM;
+  body.innerHTML=(rws.length?rws.map(function(r,i){
+    var best=null,bv=0;codes.forEach(function(c){var v=(by[c][LOSS_DIM]||{})[r.k]||0;if(v>bv){bv=v;best=c;}});
+    return '<tr style="cursor:pointer;" onclick="openLossDrill('+i+')" title="Click to see stores driving this"><td style="font-weight:600;color:#3b82f6;">'+lossEsc(r.k)+' <span style="font-size:9px;color:#9ca3af;">&#9656;</span></td><td class="r" style="font-weight:700;color:#dc2626;">'+lossCnt(r.v)+'</td><td class="r">'+(grand?Math.round(r.v/grand*100):0)+'%</td><td style="font-size:11px;">'+(best?best+' ('+lossCnt(bv)+')':'—')+'</td>'+bar(r.v,max)+'</tr>';
+  }).join('')+'<tr class="ft"><td>Total</td><td class="r" style="font-weight:700;color:#dc2626;">'+lossCnt(grand)+'</td><td class="r">100%</td><td></td><td></td></tr>'
+    :empty(5,noMsg));
+}
+function lossFilterEntries(list){
+  var q=LOSS_Q;
+  var out=!q?list.slice():list.filter(function(e){return (e.c+' '+e.r+' '+e.s+' '+e.cat+' '+e.sc+' '+e.cn+' '+e.an+' '+e.emp+' '+e.occ).toLowerCase().indexOf(q)>=0;});
+  out.sort(function(a,b){return a.d<b.d?1:a.d>b.d?-1:(a.c<b.c?-1:a.c>b.c?1:0);});
+  return out;
+}
+function lossDateLbl(iso){if(!iso)return '—';return iso.slice(8)+'-'+['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+iso.slice(5,7)];}
+function lossEntryRow(e){
+  return '<tr><td style="white-space:nowrap;">'+lossDateLbl(e.d)+'</td><td style="font-weight:700;color:#3b82f6;cursor:pointer;" onclick="openLossStore(\''+e.c+'\')">'+e.c+'</td><td style="font-size:11px;">'+lossEsc(e.r)+'</td><td style="font-size:11px;">'+lossEsc(e.s)+'</td><td style="font-size:11px;">'+lossEsc(e.cat)+'</td><td style="font-size:11px;">'+lossEsc(e.sc)+'</td>'+
+    '<td style="font-size:11px;white-space:normal;min-width:180px;max-width:320px;">'+lossEsc(e.cn)+'</td><td style="font-size:11px;white-space:normal;min-width:160px;max-width:300px;">'+lossEsc(e.an)+'</td><td style="font-size:11px;">'+lossEsc(e.emp)+'</td><td style="font-size:11px;white-space:nowrap;">'+lossEsc(e.tm)+'</td></tr>';
+}
+// CSV: Remarks exports every matching entry (not just the rows on screen)
+function lossCSV(){
+  if(LOSS_DIM!=='remarks'){dlT('t-lr','LossOfSale_'+LOSS_DIM);return;}
+  var ents=window._lrEntries||[];
+  var H=['Date','Store code','Store','RM','CM','Reason','Sub-reason','Category','Sub-category','Customer notes','Associate notes','Employee','Time','Occasion','Follow up','Bill type'];
+  var scope=lossScope();
+  var lines=[H].concat(ents.map(function(e){var s=scope[e.c]||{};return [e.d,e.c,(s.name||'').replace(/\s*\([^)]*\)\s*$/,''),s.rm||'',s.cm||'',e.r,e.s,e.cat,e.sc,e.cn,e.an,e.emp,e.tm,e.occ,e.fu,e.bt];}));
+  var csv=lines.map(function(r){return r.map(function(v){return '"'+String(v==null?'':v).replace(/\n/g,' ').replace(/"/g,'""')+'"';}).join(',');}).join('\n');
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}));a.download='LossOfSale_Remarks_'+lossPeriod()+'_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
+}
+function lossModal(title,sub,html){
+  var ex=document.getElementById('lossdrill-modal');if(ex)ex.remove();
   var m=document.createElement('div');m.id='lossdrill-modal';
   m.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
   var inner=document.createElement('div');
-  inner.style.cssText='background:var(--surface);border-radius:12px;width:100%;max-width:640px;margin:auto;box-shadow:0 25px 60px rgba(0,0,0,.4);border:1px solid var(--border);';
-  var period=(selMonths&&selMonths.length>1)?selMonths.join('+'):activeSheet;
-  var rowsHtml=per.map(function(r){var pct=total?Math.round(r.v/total*100):0,w=max?Math.round(r.v/max*100):0;
-    return '<tr style="cursor:pointer;" onclick="document.getElementById(\'lossdrill-modal\').remove();openDrill(\''+r.code+'\')"><td style="padding:6px 12px;font-weight:700;color:#3b82f6;border-bottom:1px solid var(--border);">'+r.code+'</td><td style="padding:6px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);">'+(r.rm||'')+'</td><td style="padding:6px 12px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);">'+(r.market||'')+'</td><td style="padding:6px 12px;text-align:right;font-weight:700;color:#dc2626;border-bottom:1px solid var(--border);">'+N(r.v)+'</td><td style="padding:6px 12px;text-align:right;border-bottom:1px solid var(--border);">'+pct+'%</td><td style="padding:6px 12px;border-bottom:1px solid var(--border);min-width:90px;"><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden;"><div style="width:'+w+'%;height:100%;background:#dc2626;border-radius:4px;"></div></div></td></tr>';
-  }).join('');
-  inner.innerHTML=
-    '<div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:12px 12px 0 0;">'+
-      '<div><div style="font-size:15px;font-weight:800;color:var(--text);">'+value+'</div>'+
-      '<div style="font-size:11px;color:var(--text2);margin-top:3px;">'+DIMLBL+' · '+period+' · '+N(total)+' losses across '+per.length+' stores · KA & KL</div></div>'+
-      '<button id="lossdrill-close" style="width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:16px;color:var(--text2);">&#215;</button>'+
-    '</div>'+
-    '<div style="padding:8px 16px 16px;"><div style="border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:64vh;"><table style="width:100%;border-collapse:collapse;font-size:12px;">'+
-    '<thead><tr style="background:var(--surface2);position:sticky;top:0;"><th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;border-bottom:2px solid var(--border);">Store</th><th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;border-bottom:2px solid var(--border);">RM</th><th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;border-bottom:2px solid var(--border);">Market</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;border-bottom:2px solid var(--border);">Losses</th><th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;border-bottom:2px solid var(--border);">%</th><th style="padding:8px 12px;border-bottom:2px solid var(--border);">Share</th></tr></thead><tbody>'+rowsHtml+'</tbody></table></div></div>';
+  inner.style.cssText='background:var(--surface);border-radius:12px;width:100%;max-width:980px;margin:auto;box-shadow:0 25px 60px rgba(0,0,0,.4);border:1px solid var(--border);';
+  inner.innerHTML='<div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--surface2);border-radius:12px 12px 0 0;">'+
+    '<div><div style="font-size:15px;font-weight:800;color:var(--text);">'+title+'</div><div style="font-size:11px;color:var(--text2);margin-top:3px;">'+sub+'</div></div>'+
+    '<button id="lossdrill-close" style="width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:16px;color:var(--text2);">&#215;</button></div>'+
+    '<div style="padding:10px 16px 16px;">'+html+'</div>';
   m.appendChild(inner);document.body.appendChild(m);
   m.onclick=function(e){if(e.target===m)m.remove();};
   inner.querySelector('#lossdrill-close').onclick=function(){m.remove();};
 }
-var LOSS_DIM='reason';
-function setLossDim(d){
-  LOSS_DIM=d;
-  ['reason','sub','cat','store'].forEach(function(k){var b=document.getElementById('lr-'+k);if(b)b.classList.toggle('active',k===d);});
-  renderLossReason();
+var LOSS_TH='padding:7px 10px;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;border-bottom:2px solid var(--border);background:var(--surface2);position:sticky;top:0;';
+var LOSS_TD='padding:6px 10px;border-bottom:1px solid var(--border);';
+function lossMiniTable(title,obj,total){
+  var ks=Object.keys(obj||{}).sort(function(a,b){return obj[b]-obj[a];});
+  return '<div style="flex:1;min-width:260px;"><div style="font-size:12px;font-weight:700;margin:6px 0;">'+title+'</div><div style="border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:34vh;"><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="'+LOSS_TH+'text-align:left;">'+title+'</th><th style="'+LOSS_TH+'text-align:right;">Entries</th><th style="'+LOSS_TH+'text-align:right;">%</th></tr></thead><tbody>'+
+    (ks.length?ks.map(function(k){return '<tr><td style="'+LOSS_TD+'">'+lossEsc(k)+'</td><td style="'+LOSS_TD+'text-align:right;font-weight:700;color:#dc2626;">'+lossCnt(obj[k])+'</td><td style="'+LOSS_TD+'text-align:right;">'+(total?Math.round(obj[k]/total*100):0)+'%</td></tr>';}).join(''):'<tr><td colspan="3" style="'+LOSS_TD+'color:#9ca3af;text-align:center;">—</td></tr>')+
+    '</tbody></table></div></div>';
 }
-// codes currently in scope (respects RM/CM/Market/Type filters), and their store objects
-function lossScope(){var by={};ovStores().forEach(function(s){by[(s.code||'').toUpperCase()]=s;});return by;}
-function renderLossReason(){
-  var body=document.getElementById('b-lr');if(!body)return;
-  var months=(selMonths&&selMonths.length)?selMonths:[activeSheet];
-  var scope=lossScope();
-  var period=(selMonths&&selMonths.length>1)?selMonths.join('+'):activeSheet;
-  // aggregate the chosen dimension across in-scope stores + selected months
-  var agg={},grandTotal=0,storeTot={},reasonTot={};
-  months.forEach(function(m){var md=LOSS_DATA&&LOSS_DATA[m];if(!md)return;
-    Object.keys(scope).forEach(function(code){var d=md[code];if(!d)return;
-      grandTotal+=d.total;storeTot[code]=(storeTot[code]||0)+d.total;
-      (function(rm){Object.keys(rm).forEach(function(k){reasonTot[k]=(reasonTot[k]||0)+rm[k];});})(d.reason||{});
-      if(LOSS_DIM!=='store'){var dim=d[LOSS_DIM]||{};Object.keys(dim).forEach(function(k){agg[k]=(agg[k]||0)+dim[k];});}
-    });
-  });
-  var DIMLBL={reason:'Reason',sub:'Sub-reason',cat:'Category',store:'Store'}[LOSS_DIM];
-  var rows;
-  if(LOSS_DIM==='store'){
-    rows=Object.keys(storeTot).map(function(code){var s=scope[code];return {k:code,v:storeTot[code],rm:s?s.rm:'',market:s?mkt(s):''};});
-  } else {
-    rows=Object.keys(agg).map(function(k){return {k:k,v:agg[k]};});
-  }
-  rows.sort(function(a,b){return b.v-a.v;});
-  var max=rows.length?rows[0].v:1;
-  // cards
-  var topReason=Object.keys(reasonTot).sort(function(a,b){return reasonTot[b]-reasonTot[a];})[0]||'—';
-  var cards=document.getElementById('lr-cards');
-  if(cards){
-    function kc(l,v,sub,cls){return '<div class="kc"><div class="kl">'+l+'</div><div class="kv'+(cls?' '+cls:'')+'">'+v+'</div><div class="ks">'+(sub||'')+'</div></div>';}
-    var nStores=Object.keys(storeTot).filter(function(c){return storeTot[c]>0;}).length;
-    cards.innerHTML=
-      kc('Total Losses', N(grandTotal), period+' · KA & KL','red')+
-      kc('Top '+DIMLBL, rows.length?rows[0].k:'—', rows.length?(grandTotal?Math.round(rows[0].v/grandTotal*100)+'% · '+N(rows[0].v):''):'')+
-      kc(DIMLBL+'s', rows.length+'', 'distinct values')+
-      kc('Stores', nStores+'', 'with loss data')+
-      kc('Avg / Store', nStores?N(Math.round(grandTotal/nStores)):'—', 'losses per store');
-  }
-  document.getElementById('lr-title').textContent='Loss Reason Analysis — by '+DIMLBL+' · '+period+' · Karnataka & Kerala only'+(!LOSS_DATA?'  ·  loading…':'');
-  // table
-  var th=document.getElementById('lr-thead');
-  if(th){
-    if(LOSS_DIM==='store'){
-      th.innerHTML='<tr><th onclick="srt(\'t-lr\',0)">Store</th><th onclick="srt(\'t-lr\',1)">RM</th><th onclick="srt(\'t-lr\',2)">Market</th><th class="r" onclick="srt(\'t-lr\',3)">Losses</th><th class="r" onclick="srt(\'t-lr\',4)">% of total</th><th>Share</th></tr>';
-    } else {
-      th.innerHTML='<tr><th onclick="srt(\'t-lr\',0)">'+DIMLBL+'</th><th class="r" onclick="srt(\'t-lr\',1)">Losses</th><th class="r" onclick="srt(\'t-lr\',2)">% of total</th><th>Share</th></tr>';
-    }
-  }
-  function bar(v){var w=max?Math.round(v/max*100):0;return '<td style="min-width:120px;"><div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;"><div style="width:'+w+'%;height:100%;background:#dc2626;border-radius:4px;"></div></div></td>';}
-  window._lrRows=rows;window._lrDim=LOSS_DIM;window._lrMonths=months;   // for the drill
-  body.innerHTML=(rows.length?rows.map(function(r,i){
-    var pct=grandTotal?Math.round(r.v/grandTotal*100):0;
-    if(LOSS_DIM==='store'){
-      return '<tr style="cursor:pointer;" onclick="openDrill(\''+r.k+'\')" title="Open store detail"><td style="font-weight:700;color:#3b82f6;">'+r.k+'</td><td>'+(r.rm||'')+'</td><td>'+(r.market||'')+'</td><td class="r" style="font-weight:700;color:#dc2626;">'+N(r.v)+'</td><td class="r">'+pct+'%</td>'+bar(r.v)+'</tr>';
-    }
-    return '<tr style="cursor:pointer;" onclick="openLossDrill('+i+')" title="Click to see stores driving this"><td style="font-weight:600;color:#3b82f6;">'+r.k+' <span style="font-size:9px;color:#9ca3af;">&#9656;</span></td><td class="r" style="font-weight:700;color:#dc2626;">'+N(r.v)+'</td><td class="r">'+pct+'%</td>'+bar(r.v)+'</tr>';
-  }).join('')
-    : '<tr><td colspan="'+(LOSS_DIM==='store'?6:4)+'" style="text-align:center;color:#9ca3af;padding:18px;">'+(LOSS_DATA?'No loss data for this selection (only APR/MAY/JUN available).':'Loading…')+'</td></tr>')+
-  (rows.length?'<tr class="ft"><td'+(LOSS_DIM==='store'?' colspan="3"':'')+'>Total</td><td class="r" style="font-weight:700;color:#dc2626;">'+N(grandTotal)+'</td><td class="r">100%</td><td></td></tr>':'');
+// Store pop-up: count, reason, reason › sub-reason, and every remark
+function openLossStore(code){
+  var A=lossAgg(),o=A.by[code]||{total:0,reason:{},sub:{},cat:{},rs:{}},s=A.scope[code]||{};
+  var wi=s.mtdWalkIns||0;
+  var pairs={};Object.keys(o.rs||{}).forEach(function(k){pairs[k.replace('\u0001',' › ')]=o.rs[k];});
+  var ents=A.entries.filter(function(e){return e.c===code;}).sort(function(a,b){return a.d<b.d?1:a.d>b.d?-1:0;});
+  var rem=ents.length?'<div style="font-size:12px;font-weight:700;margin:12px 0 6px;">Remarks ('+lossCnt(ents.length)+')</div><div style="border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:42vh;"><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr>'+
+      ['Date','Reason','Sub-reason','Category','Sub-category','Customer notes','Associate notes','Employee'].map(function(h){return '<th style="'+LOSS_TH+'text-align:left;">'+h+'</th>';}).join('')+'</tr></thead><tbody>'+
+      ents.map(function(e){return '<tr><td style="'+LOSS_TD+'white-space:nowrap;">'+lossDateLbl(e.d)+'</td><td style="'+LOSS_TD+'">'+lossEsc(e.r)+'</td><td style="'+LOSS_TD+'">'+lossEsc(e.s)+'</td><td style="'+LOSS_TD+'">'+lossEsc(e.cat)+'</td><td style="'+LOSS_TD+'">'+lossEsc(e.sc)+'</td><td style="'+LOSS_TD+'min-width:160px;">'+lossEsc(e.cn)+'</td><td style="'+LOSS_TD+'min-width:140px;">'+lossEsc(e.an)+'</td><td style="'+LOSS_TD+'">'+lossEsc(e.emp)+'</td></tr>';}).join('')+'</tbody></table></div>'
+    :'<div style="font-size:11px;color:var(--text2);margin-top:10px;">'+(A.src.live.length?'No remarks for this store in the selection.':'Remarks appear once the live Loss-of-Sale link is connected.')+'</div>';
+  lossModal(code+' · '+lossEsc((s.name||'').replace(/\s*\([^)]*\)\s*$/,'')),
+    lossPeriod()+' · '+lossCnt(o.total)+' loss entries'+(wi?' · '+lossCnt(wi)+' walk-ins · '+(o.total/wi*100).toFixed(1)+' per 100 WI':'')+' · RM '+lossEsc(s.rm||'—')+' · CM '+lossEsc(s.cm||'—')+
+      ' · <a href="#" onclick="document.getElementById(\'lossdrill-modal\').remove();openDrill(\''+code+'\');return false;" style="color:#3b82f6;">open store KPIs</a>',
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+lossMiniTable('Reason',o.reason,o.total)+lossMiniTable('Reason › Sub-reason',Object.keys(pairs).length?pairs:o.sub,o.total)+'</div>'+rem);
+}
+// Drill: clicking a Reason/Sub-reason/Category shows which stores drove it
+function openLossDrill(idx){
+  var rows=window._lrRows||[],dim=window._lrDim;var row=rows[idx];if(!row)return;
+  var A=lossAgg(),per=[];
+  Object.keys(A.by).forEach(function(c){var v=(A.by[c][dim]||{})[row.k]||0;if(v>0){var s=A.scope[c]||{};per.push({c:c,rm:s.rm,cm:s.cm,v:v,t:A.by[c].total});}});
+  per.sort(function(a,b){return b.v-a.v;});
+  var total=per.reduce(function(a,r){return a+r.v;},0),max=per.length?per[0].v:1;
+  var DIMLBL={reason:'Reason',sub:'Sub-reason',cat:'Category'}[dim]||dim;
+  lossModal(lossEsc(row.k),DIMLBL+' · '+lossPeriod()+' · '+lossCnt(total)+' entries across '+per.length+' stores · KA & KL · click a store for its remarks',
+    '<div style="border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:64vh;"><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr>'+
+    ['Store','RM','CM','Entries','% of this','% of store'].map(function(h,i){return '<th style="'+LOSS_TH+'text-align:'+(i>2?'right':'left')+';">'+h+'</th>';}).join('')+'<th style="'+LOSS_TH+'">Share</th></tr></thead><tbody>'+
+    per.map(function(r){var w=max?Math.round(r.v/max*100):0;return '<tr style="cursor:pointer;" onclick="openLossStore(\''+r.c+'\')"><td style="'+LOSS_TD+'font-weight:700;color:#3b82f6;">'+r.c+'</td><td style="'+LOSS_TD+'font-size:11px;">'+lossEsc(r.rm||'')+'</td><td style="'+LOSS_TD+'font-size:11px;">'+lossEsc(r.cm||'')+'</td><td style="'+LOSS_TD+'text-align:right;font-weight:700;color:#dc2626;">'+lossCnt(r.v)+'</td><td style="'+LOSS_TD+'text-align:right;">'+(total?Math.round(r.v/total*100):0)+'%</td><td style="'+LOSS_TD+'text-align:right;">'+(r.t?Math.round(r.v/r.t*100):0)+'%</td><td style="'+LOSS_TD+'min-width:90px;"><div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden;"><div style="width:'+w+'%;height:100%;background:#dc2626;border-radius:4px;"></div></div></td></tr>';}).join('')+
+    '</tbody></table></div>');
 }
 
 // ═══════════════════════════════════════════
@@ -2964,6 +3146,7 @@ function showTab(id,el){
   var panel=document.getElementById('panel-'+id);if(panel)panel.classList.add('active');
   el.classList.add('active');
   if(id==='rmkpi')rmkShow();
+  if(id==='lr')renderLossReason();
 }
 
 // ═══════════════════════════════════════════
@@ -3720,7 +3903,7 @@ window.addEventListener('load',function(){
   fetch('l2l_map.json').then(function(r){return r.ok?r.json():null;}).then(function(d){if(d){L2L_DATA=d;renderL2L();}}).catch(function(){});
   fetch('walkins_ly_map.json').then(function(r){return r.ok?r.json():null;}).then(function(d){if(d){WLY_DATA=d;if(DAY_LY==='walkins')renderDaywise();}}).catch(function(){});
   // Load lost-sale incident data for the Loss of Sale tab
-  fetch('loss_map.json').then(function(r){return r.ok?r.json():null;}).then(function(d){if(d){LOSS_DATA=d;renderLOS();}}).catch(function(){});
+  fetch('loss_map.json').then(function(r){return r.ok?r.json():null;}).then(function(d){if(d){LOSS_DATA=d;renderLossReason();}}).catch(function(){});
   if(catInp&&savedCatURL)catInp.value=savedCatURL;
   if(savedURL){activeURL=savedURL;connectTo(savedURL,savedSheet);}
   else{setSt('Paste URL above and click Load','');showInfo('Paste your Apps Script URL in the top bar and click ▶ Load','inf');}
