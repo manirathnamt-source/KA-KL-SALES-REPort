@@ -1614,7 +1614,7 @@ function filterBy(key,val){var id=key==='rm'?'sel-rm':'sel-cm';var el=document.g
 // STORE TABLE
 // ═══════════════════════════════════════════
 function renderStores(){
-  var f=[...ovStores()].sort(function(a,b){return(b.trendingPct||0)-(a.trendingPct||0);});
+  var f=[...ovStores()].sort(function(a,b){return(b.target||0)-(a.target||0);});   // biggest target first
   var dL=Math.max(0,totalDays-(f[0]&&f[0].daysCount||0));
   var totT=0,totS=0,totP=0;f.forEach(function(s){totT+=s.target;totS+=s.mtdSales;totP+=s.projectedTotal||0;});
   document.getElementById('b-store').innerHTML=f.map(function(s){
