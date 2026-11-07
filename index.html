@@ -465,6 +465,7 @@ tr.ft td { background: var(--surface2); font-weight: 700; border-top: 2px solid 
     <button id="lr-reason" class="wkbtn" onclick="setLossDim('reason')">Reason</button>
     <button id="lr-sub" class="wkbtn" onclick="setLossDim('sub')">Sub-reason</button>
     <button id="lr-cat" class="wkbtn" onclick="setLossDim('cat')">Category</button>
+    <button id="lr-prod" class="wkbtn" onclick="setLossDim('prod')">Product</button>
     <button id="lr-remarks" class="wkbtn" onclick="setLossDim('remarks')">Remarks</button>
     <div id="lr-qwrap" style="display:none;align-items:center;gap:6px;">
       <input id="lr-q" type="search" placeholder="Search store, reason, notes…" oninput="lossSearch(this.value)"
@@ -2152,12 +2153,12 @@ function lossInRange(iso){if(!rangeActive()||!iso)return true;var n=strNum(iso),
 // Unified per-store aggregate for the selected months: live entries when present, else static file
 function lossAgg(){
   var scope=lossScope(),by={},entries=[],src={live:[],stat:[],none:[],busy:[],err:[]},last='';
-  function slot(code){return by[code]||(by[code]={total:0,reason:{},sub:{},cat:{},rs:{}});}
+  function slot(code){return by[code]||(by[code]={total:0,reason:{},sub:{},cat:{},prod:{},rs:{}});}
   lossMonths().forEach(function(m){
     var L=LOSS_LIVE[m];
     if(L&&!L.none){src.live.push(m);if(L.last>last)last=L.last;
       L.entries.forEach(function(e){if(!scope[e.c]||!lossInRange(e.d))return;var o=slot(e.c);o.total++;
-        o.reason[e.r]=(o.reason[e.r]||0)+1;o.sub[e.s]=(o.sub[e.s]||0)+1;o.cat[e.cat]=(o.cat[e.cat]||0)+1;var k=e.r+'\u0001'+e.s;o.rs[k]=(o.rs[k]||0)+1;entries.push(e);});
+        o.reason[e.r]=(o.reason[e.r]||0)+1;o.sub[e.s]=(o.sub[e.s]||0)+1;o.cat[e.cat]=(o.cat[e.cat]||0)+1;var p=e.sc||'Blank';o.prod[p]=(o.prod[p]||0)+1;var k=e.r+'\u0001'+e.s;o.rs[k]=(o.rs[k]||0)+1;entries.push(e);});
       return;}
     var md=LOSS_DATA&&LOSS_DATA[m];
     if(md&&!LOSS_BUSY[m]){src.stat.push(m);
@@ -2172,7 +2173,7 @@ function lossTop(o){var k=Object.keys(o||{}).sort(function(a,b){return o[b]-o[a]
 function lossShare(o,k,tot){return tot&&o&&o[k]?Math.round(o[k]/tot*100)+'%':'';}
 function setLossDim(d){
   LOSS_DIM=d;
-  ['store','matrix','reason','sub','cat','remarks'].forEach(function(k){var b=document.getElementById('lr-'+k);if(b)b.classList.toggle('active',k===d);});
+  ['store','matrix','reason','sub','cat','prod','remarks'].forEach(function(k){var b=document.getElementById('lr-'+k);if(b)b.classList.toggle('active',k===d);});
   var q=document.getElementById('lr-qwrap');if(q)q.style.display=(d==='remarks')?'flex':'none';
   renderLossReason();
 }
@@ -2208,7 +2209,7 @@ function renderLossReason(){
       kc('Top reason',lossEsc(tr),lossShare(allR,tr,grand)+(allR[tr]?' · '+lossCnt(allR[tr]):''))+
       kc('Top sub-reason',lossEsc(ts),lossShare(allS,ts,grand)+(allS[ts]?' · '+lossCnt(allS[ts]):''));
   }
-  var DIMLBL={store:'Store',matrix:'Store × Reason',reason:'Reason',sub:'Sub-reason',cat:'Category',remarks:'Remarks'}[LOSS_DIM];
+  var DIMLBL={store:'Store',matrix:'Store × Reason',reason:'Reason',sub:'Sub-reason',cat:'Category',prod:'Product',remarks:'Remarks'}[LOSS_DIM];
   document.getElementById('lr-title').textContent='Loss of Sale — '+DIMLBL+' · '+period+(rangeActive()?' · '+rangeLabel():'')+' · Karnataka & Kerala';
   var th=document.getElementById('lr-thead');
   function bar(v,max){var w=max?Math.round(v/max*100):0;return '<td style="min-width:90px;"><div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;"><div style="width:'+w+'%;height:100%;background:#dc2626;border-radius:4px;"></div></div></td>';}
@@ -2256,17 +2257,20 @@ function renderLossReason(){
       :empty(10,staticOnly?'Remarks need the live Loss-of-Sale link (the saved APR–JUN file has counts only).':(LOSS_Q?'No entries match “'+lossEsc(LOSS_Q)+'”.':noMsg)));
     return;
   }
-  // reason / sub / cat
+  // reason / sub / cat / prod
   var agg={};codes.forEach(function(c){var x=by[c][LOSS_DIM]||{};Object.keys(x).forEach(function(k){agg[k]=(agg[k]||0)+x[k];});});
   var rws=Object.keys(agg).map(function(k){return {k:k,v:agg[k]};}).sort(function(a,b){return b.v-a.v;});
   var max=rws.length?rws[0].v:1;
-  th.innerHTML='<tr><th onclick="srt(\'t-lr\',0)">'+DIMLBL+'</th><th class="r" onclick="srt(\'t-lr\',1)">Entries</th><th class="r" onclick="srt(\'t-lr\',2)">% of total</th><th onclick="srt(\'t-lr\',3)">Top store</th><th>Share</th></tr>';
+  var isP=LOSS_DIM==='prod',pcat={};   // product → the category it is most often logged under
+  if(isP){var pc={};A.entries.forEach(function(e){if(!A.scope[e.c]||!lossInRange(e.d))return;var p=e.sc||'Blank';(pc[p]=pc[p]||{})[e.cat]=(pc[p][e.cat]||0)+1;});Object.keys(pc).forEach(function(p){pcat[p]=lossTop(pc[p]);});}
+  th.innerHTML='<tr><th onclick="srt(\'t-lr\',0)">'+DIMLBL+'</th>'+(isP?'<th onclick="srt(\'t-lr\',1)">Category</th>':'')+'<th class="r" onclick="srt(\'t-lr\','+(isP?2:1)+')">Entries</th><th class="r" onclick="srt(\'t-lr\','+(isP?3:2)+')">% of total</th><th onclick="srt(\'t-lr\','+(isP?4:3)+')">Top store</th><th>Share</th></tr>';
   window._lrRows=rws;window._lrDim=LOSS_DIM;
+  var staticOnlyP=isP&&!A.src.live.length&&A.src.stat.length;
   body.innerHTML=(rws.length?rws.map(function(r,i){
     var best=null,bv=0;codes.forEach(function(c){var v=(by[c][LOSS_DIM]||{})[r.k]||0;if(v>bv){bv=v;best=c;}});
-    return '<tr style="cursor:pointer;" onclick="openLossDrill('+i+')" title="Click to see stores driving this"><td style="font-weight:600;color:#3b82f6;">'+lossEsc(r.k)+' <span style="font-size:9px;color:#9ca3af;">&#9656;</span></td><td class="r" style="font-weight:700;color:#dc2626;">'+lossCnt(r.v)+'</td><td class="r">'+(grand?Math.round(r.v/grand*100):0)+'%</td><td style="font-size:11px;">'+(best?best+' ('+lossCnt(bv)+')':'—')+'</td>'+bar(r.v,max)+'</tr>';
-  }).join('')+'<tr class="ft"><td>Total</td><td class="r" style="font-weight:700;color:#dc2626;">'+lossCnt(grand)+'</td><td class="r">100%</td><td></td><td></td></tr>'
-    :empty(5,noMsg));
+    return '<tr style="cursor:pointer;" onclick="openLossDrill('+i+')" title="Click to see stores driving this"><td style="font-weight:600;color:#3b82f6;">'+lossEsc(r.k)+' <span style="font-size:9px;color:#9ca3af;">&#9656;</span></td>'+(isP?'<td style="font-size:11px;color:var(--text2);">'+lossEsc(pcat[r.k]||'—')+'</td>':'')+'<td class="r" style="font-weight:700;color:#dc2626;">'+lossCnt(r.v)+'</td><td class="r">'+(grand?Math.round(r.v/grand*100):0)+'%</td><td style="font-size:11px;">'+(best?best+' ('+lossCnt(bv)+')':'—')+'</td>'+bar(r.v,max)+'</tr>';
+  }).join('')+'<tr class="ft"><td'+(isP?' colspan="2"':'')+'>Total</td><td class="r" style="font-weight:700;color:#dc2626;">'+lossCnt(rws.reduce(function(a,r){return a+r.v;},0))+'</td><td class="r">100%</td><td></td><td></td></tr>'
+    :empty(isP?6:5,staticOnlyP?'Product detail needs the live Loss-of-Sale link (the saved APR–JUN file has categories only).':noMsg));
 }
 function lossFilterEntries(list){
   var q=LOSS_Q;
@@ -2313,7 +2317,7 @@ function lossMiniTable(title,obj,total){
 }
 // Store pop-up: count, reason, reason › sub-reason, and every remark
 function openLossStore(code){
-  var A=lossAgg(),o=A.by[code]||{total:0,reason:{},sub:{},cat:{},rs:{}},s=A.scope[code]||{};
+  var A=lossAgg(),o=A.by[code]||{total:0,reason:{},sub:{},cat:{},prod:{},rs:{}},s=A.scope[code]||{};
   var wi=s.mtdWalkIns||0;
   var pairs={};Object.keys(o.rs||{}).forEach(function(k){pairs[k.replace('\u0001',' › ')]=o.rs[k];});
   var ents=A.entries.filter(function(e){return e.c===code;}).sort(function(a,b){return a.d<b.d?1:a.d>b.d?-1:0;});
@@ -2324,7 +2328,8 @@ function openLossStore(code){
   lossModal(code+' · '+lossEsc((s.name||'').replace(/\s*\([^)]*\)\s*$/,'')),
     lossPeriod()+' · '+lossCnt(o.total)+' loss entries'+(wi?' · '+lossCnt(wi)+' walk-ins · '+(o.total/wi*100).toFixed(1)+' per 100 WI':'')+' · RM '+lossEsc(s.rm||'—')+' · CM '+lossEsc(s.cm||'—')+
       ' · <a href="#" onclick="document.getElementById(\'lossdrill-modal\').remove();openDrill(\''+code+'\');return false;" style="color:#3b82f6;">open store KPIs</a>',
-    '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+lossMiniTable('Reason',o.reason,o.total)+lossMiniTable('Reason › Sub-reason',Object.keys(pairs).length?pairs:o.sub,o.total)+'</div>'+rem);
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+lossMiniTable('Reason',o.reason,o.total)+lossMiniTable('Reason › Sub-reason',Object.keys(pairs).length?pairs:o.sub,o.total)+'</div>'+
+      '<div style="display:flex;gap:12px;flex-wrap:wrap;">'+lossMiniTable('Category',o.cat,o.total)+(Object.keys(o.prod||{}).length?lossMiniTable('Product',o.prod,o.total):'')+'</div>'+rem);
 }
 // Drill: clicking a Reason/Sub-reason/Category shows which stores drove it
 function openLossDrill(idx){
@@ -2333,7 +2338,7 @@ function openLossDrill(idx){
   Object.keys(A.by).forEach(function(c){var v=(A.by[c][dim]||{})[row.k]||0;if(v>0){var s=A.scope[c]||{};per.push({c:c,rm:s.rm,cm:s.cm,v:v,t:A.by[c].total});}});
   per.sort(function(a,b){return b.v-a.v;});
   var total=per.reduce(function(a,r){return a+r.v;},0),max=per.length?per[0].v:1;
-  var DIMLBL={reason:'Reason',sub:'Sub-reason',cat:'Category'}[dim]||dim;
+  var DIMLBL={reason:'Reason',sub:'Sub-reason',cat:'Category',prod:'Product'}[dim]||dim;
   lossModal(lossEsc(row.k),DIMLBL+' · '+lossPeriod()+' · '+lossCnt(total)+' entries across '+per.length+' stores · KA & KL · click a store for its remarks',
     '<div style="border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:64vh;"><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr>'+
     ['Store','RM','CM','Entries','% of this','% of store'].map(function(h,i){return '<th style="'+LOSS_TH+'text-align:'+(i>2?'right':'left')+';">'+h+'</th>';}).join('')+'<th style="'+LOSS_TH+'">Share</th></tr></thead><tbody>'+
