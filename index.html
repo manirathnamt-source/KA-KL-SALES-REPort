@@ -2114,6 +2114,8 @@ function lossTabFor(m){
 }
 function lossISO(v){
   if(v==null||v==='')return '';
+  var m=String(v).trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);   // typed dd/mm/yyyy
+  if(m){var y=+m[3];if(y<100)y+=2000;return y+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2);}
   var d=new Date(v);if(isNaN(d))return '';
   d=new Date(d.getTime()+19800000);   // sheet dates arrive as IST midnight in UTC
   return d.toISOString().slice(0,10);
@@ -2678,10 +2680,14 @@ function openDrill(code){
   var lyWlk=(WLY_DATA&&WLY_DATA[activeSheet]&&WLY_DATA[activeSheet][cu])||[];
   var hasW=!!s.dayWalkIns,hasQ=!!s.dayQty;
   // Loss-of-sale entries per day (live sheet); the saved APR–JUN file only has a month total
-  var LL=(typeof LOSS_LIVE!=='undefined'&&LOSS_LIVE[activeSheet])||null,lossDay=null,lossTot=null;
-  if(LL&&!LL.none){lossDay=[];lossTot=0;LL.entries.forEach(function(e){if(e.c!==cu||!e.d)return;var di=+e.d.slice(8)-1;lossDay[di]=(lossDay[di]||0)+1;lossTot++;});}
-  else if(LOSS_DATA&&LOSS_DATA[activeSheet]&&LOSS_DATA[activeSheet][cu])lossTot=LOSS_DATA[activeSheet][cu].total||0;
-  else if(lossURL()&&!(LL&&LL.none)&&typeof LOSS_BUSY!=='undefined'&&!LOSS_BUSY[activeSheet]&&!LOSS_ERR[activeSheet]){window._drillWait=code;lossEnsure(true);}   // load it, then reopen
+  var LL=LOSS_LIVE[activeSheet]||null,lossDay=null,lossTot=null,lossUnd=0,lossMsg='';
+  if(LL&&!LL.none){lossDay=[];lossTot=0;LL.entries.forEach(function(e){if(e.c!==cu)return;lossTot++;if(!e.d){lossUnd++;return;}var di=+e.d.slice(8)-1;lossDay[di]=(lossDay[di]||0)+1;});
+    if(lossUnd)lossMsg=lossUnd+' loss entr'+(lossUnd>1?'ies have':'y has')+' no readable date — counted in MTD only.';}
+  else if(LOSS_DATA&&LOSS_DATA[activeSheet]&&LOSS_DATA[activeSheet][cu]){lossTot=LOSS_DATA[activeSheet][cu].total||0;lossMsg='Loss of Sale: saved file has the month total only.';}
+  else if(!lossURL())lossMsg='Loss of Sale is not connected in this browser — open the Loss of Sale tab, paste the sheet link and press Connect.';
+  else if(LL&&LL.none)lossMsg='Loss of Sale: no "Loss of sale data '+activeSheet+'" tab found in the loss sheet.';
+  else if(LOSS_ERR[activeSheet])lossMsg='Loss of Sale failed to load ('+LOSS_ERR[activeSheet]+') — press Refresh in the Loss of Sale tab.';
+  else{lossMsg='Loading Loss of Sale… this table refreshes when it arrives (about 20–30 s).';window._drillWait=code;if(!LOSS_BUSY[activeSheet])lossEnsure(true);}   // load (or wait for the load in progress), then reopen
   var lossTd=function(n,st){return '<td style="'+st+(n?'color:#dc2626;font-weight:700;':'color:var(--text3);')+'">'+(n==null?'—':n||'·')+'</td>';};
   var T={s:0,ls:0,b:0,w:0,lw:0,q:0,lsE:0,lwE:0};
   var tdS='padding:4px 8px;text-align:right;font-size:11px;font-family:monospace;border-bottom:1px solid var(--border);white-space:nowrap;';
@@ -2780,6 +2786,7 @@ function openDrill(code){
       '<thead>'+dayHead+'</thead><tbody>'+dayRows+'</tbody><tfoot>'+dayFoot+'</tfoot>'+
       '</table>'+
     '</div>'+
+    (lossMsg?'<div style="font-size:11px;color:var(--text2);margin-top:6px;">'+lossMsg+'</div>':'')+
     '</div>'; // end padding
 
   m.appendChild(inner);
