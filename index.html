@@ -2119,9 +2119,11 @@ function lossISO(v){
   return d.toISOString().slice(0,10);
 }
 function lossFetchJSON(url){return fetch(url).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();});}
-function lossEnsure(){
+// After a background load, reopen the store pop-up that asked for it (so its Loss of Sale column fills in)
+function lossDrillReopen(){var c=window._drillWait;if(!c)return;window._drillWait=null;if(document.getElementById('store-modal'))openDrill(c);}
+function lossEnsure(force){
   var url=lossURL();if(!url)return;
-  var panel=document.getElementById('panel-lr');if(!panel||!panel.classList.contains('active'))return;   // only fetch when the tab is open
+  var panel=document.getElementById('panel-lr');if(!force&&(!panel||!panel.classList.contains('active')))return;   // only fetch when the tab is open (or a store pop-up asks)
   var need=lossMonths().filter(function(m){return !LOSS_LIVE[m]&&!LOSS_BUSY[m]&&!LOSS_ERR[m];});
   if(!need.length)return;
   need.forEach(function(m){LOSS_BUSY[m]=true;});
@@ -2129,7 +2131,7 @@ function lossEnsure(){
   tabsP.then(function(){
     need.forEach(function(m){
       var tab=lossTabFor(m);
-      if(!tab){LOSS_BUSY[m]=false;LOSS_LIVE[m]={none:true,entries:[]};renderLossReason();return;}
+      if(!tab){LOSS_BUSY[m]=false;LOSS_LIVE[m]={none:true,entries:[]};renderLossReason();lossDrillReopen();return;}
       lossFetchJSON(url+'?sheet='+encodeURIComponent(tab)).then(function(d){
         var H=((d&&d.headers)||[]).map(function(h){return String(h).trim().toLowerCase();});
         function col(names,def){for(var i=0;i<names.length;i++){var k=H.indexOf(names[i]);if(k>=0)return k;}return def;}
@@ -2144,10 +2146,10 @@ function lossEnsure(){
           out.push({d:dt,c:code,tm:g(C.tm),emp:g(C.emp),r:g(C.r)||'Blank',s:g(C.s)||'Blank',cat:g(C.cat)||'Blank',sc:g(C.sc),cn:g(C.cn),an:g(C.an),occ:g(C.occ),fu:g(C.fu),bt:g(C.bt)});
           if(dt>last)last=dt;
         });
-        LOSS_LIVE[m]={tab:tab,entries:out,last:last};LOSS_BUSY[m]=false;renderLossReason();
-      }).catch(function(e){LOSS_BUSY[m]=false;LOSS_ERR[m]=String(e&&e.message||e);renderLossReason();});
+        LOSS_LIVE[m]={tab:tab,entries:out,last:last};LOSS_BUSY[m]=false;renderLossReason();lossDrillReopen();
+      }).catch(function(e){LOSS_BUSY[m]=false;LOSS_ERR[m]=String(e&&e.message||e);renderLossReason();window._drillWait=null;});
     });
-  }).catch(function(e){need.forEach(function(m){LOSS_BUSY[m]=false;LOSS_ERR[m]='Could not list sheet tabs — '+(e&&e.message||e);});renderLossReason();});
+  }).catch(function(e){need.forEach(function(m){LOSS_BUSY[m]=false;LOSS_ERR[m]='Could not list sheet tabs — '+(e&&e.message||e);});renderLossReason();window._drillWait=null;});
 }
 // codes currently in scope (respects RM/CM/Market/Type/Store filters), and their store objects
 function lossScope(){var by={};ovStores().forEach(function(s){by[(s.code||'').toUpperCase()]=s;});return by;}
@@ -2675,6 +2677,12 @@ function openDrill(code){
   var lyDay=(L2L_DATA&&L2L_DATA[activeSheet]&&L2L_DATA[activeSheet][cu])||[];
   var lyWlk=(WLY_DATA&&WLY_DATA[activeSheet]&&WLY_DATA[activeSheet][cu])||[];
   var hasW=!!s.dayWalkIns,hasQ=!!s.dayQty;
+  // Loss-of-sale entries per day (live sheet); the saved APR–JUN file only has a month total
+  var LL=(typeof LOSS_LIVE!=='undefined'&&LOSS_LIVE[activeSheet])||null,lossDay=null,lossTot=null;
+  if(LL&&!LL.none){lossDay=[];lossTot=0;LL.entries.forEach(function(e){if(e.c!==cu||!e.d)return;var di=+e.d.slice(8)-1;lossDay[di]=(lossDay[di]||0)+1;lossTot++;});}
+  else if(LOSS_DATA&&LOSS_DATA[activeSheet]&&LOSS_DATA[activeSheet][cu])lossTot=LOSS_DATA[activeSheet][cu].total||0;
+  else if(lossURL()&&!(LL&&LL.none)&&typeof LOSS_BUSY!=='undefined'&&!LOSS_BUSY[activeSheet]&&!LOSS_ERR[activeSheet]){window._drillWait=code;lossEnsure(true);}   // load it, then reopen
+  var lossTd=function(n,st){return '<td style="'+st+(n?'color:#dc2626;font-weight:700;':'color:var(--text3);')+'">'+(n==null?'—':n||'·')+'</td>';};
   var T={s:0,ls:0,b:0,w:0,lw:0,q:0,lsE:0,lwE:0};
   var tdS='padding:4px 8px;text-align:right;font-size:11px;font-family:monospace;border-bottom:1px solid var(--border);white-space:nowrap;';
   function gr(ty,ly){if(!ly||!ty)return'<td style="'+tdS+'color:var(--text3);">—</td>';var g=Math.round((ty-ly)/ly*100);return'<td style="'+tdS+'font-weight:600;color:'+(g>=0?'var(--green)':'var(--red)')+';">'+(g>=0?'+':'')+g+'%</td>';}
@@ -2691,7 +2699,7 @@ function openDrill(code){
       '<td style="'+tdS+'color:var(--text3);">'+(lv?Lm(lv):'—')+'</td>'+
       '<td style="'+tdS+'color:'+col+';font-weight:600;">'+(v?Lm(v):'—')+'</td>'+gr(v,lv)+
       '<td style="'+tdS+'color:'+col+';font-size:10px;">'+(v?p+'%':'')+'</td>'+
-      (hasW?'<td style="'+tdS+'color:var(--text3);">'+(lw||'—')+'</td><td style="'+tdS+'">'+(w||'—')+'</td>'+gr(w,lw):'')+
+      (hasW?'<td style="'+tdS+'color:var(--text3);">'+(lw||'—')+'</td><td style="'+tdS+'">'+(w||'—')+'</td>'+lossTd(lossDay?(lossDay[i]||0):null,tdS)+gr(w,lw):lossTd(lossDay?(lossDay[i]||0):null,tdS))+
       '<td style="'+tdS+'">'+(b||'—')+'</td>'+
       (hasW?'<td style="'+tdS+cvc+'">'+(cv==null?'—':cv+'%')+'</td>':'')+
       '<td style="'+tdS+'">'+(abv?LA(abv):'—')+'</td>'+
@@ -2701,7 +2709,7 @@ function openDrill(code){
   var thS='padding:6px 8px;font-size:9px;text-align:right;color:var(--text2);border-bottom:2px solid var(--border);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;';
   var dayHead='<tr style="background:var(--surface2);position:sticky;top:0;z-index:1;">'+
     '<th style="'+thS+'text-align:left;">Day</th><th style="'+thS+'">Sales LY</th><th style="'+thS+'">Sales TY</th><th style="'+thS+'">Growth</th><th style="'+thS+'">% Day Tgt</th>'+
-    (hasW?'<th style="'+thS+'">W-ins LY</th><th style="'+thS+'">W-ins TY</th><th style="'+thS+'">Growth</th>':'')+
+    (hasW?'<th style="'+thS+'">W-ins LY</th><th style="'+thS+'">W-ins TY</th><th style="'+thS+'" title="Loss-of-sale entries logged">Loss of Sale</th><th style="'+thS+'">Growth</th>':'<th style="'+thS+'" title="Loss-of-sale entries logged">Loss of Sale</th>')+
     '<th style="'+thS+'">Bills</th>'+(hasW?'<th style="'+thS+'">Conv%</th>':'')+'<th style="'+thS+'">ABV</th>'+(hasQ?'<th style="'+thS+'">UPT</th>':'')+'</tr>';
   var tfS='padding:6px 8px;text-align:right;font-size:11px;font-family:monospace;border-top:2px solid var(--border);white-space:nowrap;';
   var tCv=T.w?Math.round(T.b/T.w*1000)/10:null,tAbv=T.b?Math.round(T.s/T.b):null,tUpt=T.b&&T.q?Math.round(T.q/T.b*100)/100:null;
@@ -2709,7 +2717,7 @@ function openDrill(code){
   var dayFoot='<tr style="background:var(--surface2);font-weight:700;">'+
     '<td style="'+tfS+'text-align:left;font-family:inherit;">MTD</td>'+
     '<td style="'+tfS+'color:var(--text3);">'+Lm(T.lsE)+'</td><td style="'+tfS+'color:'+pcc(ap)+';">'+Lm(T.s)+'</td>'+gf(T.s,T.lsE)+'<td style="'+tfS+'color:'+pcc(ap)+';">'+ap+'%</td>'+
-    (hasW?'<td style="'+tfS+'color:var(--text3);">'+Nm(T.lwE)+'</td><td style="'+tfS+'">'+Nm(T.w)+'</td>'+gf(T.w,T.lwE):'')+
+    (hasW?'<td style="'+tfS+'color:var(--text3);">'+Nm(T.lwE)+'</td><td style="'+tfS+'">'+Nm(T.w)+'</td>'+lossTd(lossTot,tfS)+gf(T.w,T.lwE):lossTd(lossTot,tfS))+
     '<td style="'+tfS+'">'+Nm(T.b)+'</td>'+(hasW?'<td style="'+tfS+'">'+(tCv==null?'—':tCv+'%')+'</td>':'')+
     '<td style="'+tfS+'">'+(tAbv?LA(tAbv):'—')+'</td>'+(hasQ?'<td style="'+tfS+'">'+(tUpt==null?'—':tUpt.toFixed(2))+'</td>':'')+'</tr>';
 
