@@ -3449,11 +3449,11 @@ function briefRow(s,i,lossBy){
   var cu=(s.code||'').toUpperCase(),kt=s.kpiTargets||{};
   var v=(s.daySales||[])[i]||0,b=(s.dayBills||[])[i]||0,w=(s.dayWalkIns||[])[i]||0,q=(s.dayQty||[])[i]||0;
   var ly=(L2L_DATA&&L2L_DATA[activeSheet]&&L2L_DATA[activeSheet][cu]||[])[i]||0,lw=(WLY_DATA&&WLY_DATA[activeSheet]&&WLY_DATA[activeSheet][cu]||[])[i]||0;
-  var mtd=0,mb=0,mw=0;for(var d=0;d<=i;d++){mtd+=(s.daySales||[])[d]||0;mb+=(s.dayBills||[])[d]||0;mw+=(s.dayWalkIns||[])[d]||0;}
+  var mtd=0,mb=0,mw=0,mbc=0;for(var d=0;d<=i;d++){var dw_=(s.dayWalkIns||[])[d]||0,db_=(s.dayBills||[])[d]||0;mtd+=(s.daySales||[])[d]||0;mb+=db_;mw+=dw_;if(dw_)mbc+=db_;}   // mbc: bills on days walk-ins were entered
   var tg=s.noTarget?0:(s.target||0),dt=tg/totalDays,left=totalDays-(i+1);
   var L=lossBy[cu]||{day:0,mtd:0,r:{}};
   return {s:s,code:cu,v:v,b:b,w:w,q:q,ly:ly,lw:lw,dt:dt,dp:dt?v/dt*100:null,conv:w?b/w*100:null,ct:(kt.conversion>0&&kt.conversion<=100)?kt.conversion:null,
-    wt:kt.walkIns||0,abv:b?v/b:null,upt:b&&q?q/b:null,mtd:mtd,mb:mb,mw:mw,tg:tg,ach:tg?mtd/tg*100:null,proj:tg?mtd/(i+1)*totalDays/tg*100:null,
+    wt:kt.walkIns||0,abv:b?v/b:null,upt:b&&q?q/b:null,mtd:mtd,mb:mb,mw:mw,mbc:mbc,tg:tg,ach:tg?mtd/tg*100:null,proj:tg?mtd/(i+1)*totalDays/tg*100:null,
     need:left>0&&tg>mtd?(tg-mtd)/left:0,loss:L.day,lossM:L.mtd,lossR:L.r};
 }
 // Loss-of-sale entries per store: on day i, and month-to-day i; plus the day's reasons / categories / products
@@ -3467,10 +3467,10 @@ function briefLoss(i){
   return {by:by,live:false,entries:[],none:true};
 }
 function briefAgg(rows){
-  var g={v:0,b:0,w:0,q:0,ly:0,lw:0,dt:0,mtd:0,tg:0,mb:0,mw:0,loss:0,lossM:0,ctw:0,ctn:0,need:0,lyN:0,lwN:0};
-  rows.forEach(function(r){g.v+=r.v;g.b+=r.b;g.w+=r.w;g.q+=r.q;g.dt+=r.dt;g.mtd+=r.mtd;g.tg+=r.tg;g.mb+=r.mb;g.mw+=r.mw;g.loss+=r.loss;g.lossM+=r.lossM;g.need+=r.need;
+  var g={v:0,b:0,w:0,q:0,ly:0,lw:0,dt:0,mtd:0,tg:0,mb:0,mw:0,mbc:0,bc:0,noW:[],loss:0,lossM:0,ctw:0,ctn:0,need:0,lyN:0,lwN:0};
+  rows.forEach(function(r){g.v+=r.v;g.b+=r.b;g.w+=r.w;g.q+=r.q;g.dt+=r.dt;g.mtd+=r.mtd;g.tg+=r.tg;g.mb+=r.mb;g.mw+=r.mw;g.mbc+=r.mbc;if(r.w)g.bc+=r.b;else if(r.b)g.noW.push(r.code);g.loss+=r.loss;g.lossM+=r.lossM;g.need+=r.need;
     if(r.ly){g.ly+=r.ly;g.lyN+=r.v;}if(r.lw){g.lw+=r.lw;g.lwN+=r.w;}if(r.ct){var wt=r.wt||1;g.ctw+=r.ct*wt;g.ctn+=wt;}});
-  g.dp=g.dt?g.v/g.dt*100:null;g.gr=g.ly?(g.lyN/g.ly-1)*100:null;g.conv=g.w?g.b/g.w*100:null;g.ct=g.ctn?g.ctw/g.ctn:null;
+  g.dp=g.dt?g.v/g.dt*100:null;g.gr=g.ly?(g.lyN/g.ly-1)*100:null;g.conv=g.w?g.bc/g.w*100:null;g.mconv=g.mw?g.mbc/g.mw*100:null;g.ct=g.ctn?g.ctw/g.ctn:null;
   g.abv=g.b?g.v/g.b:null;g.upt=g.b&&g.q?g.q/g.b:null;g.ach=g.tg?g.mtd/g.tg*100:null;return g;
 }
 function bPct(v,d){return v==null?'—':(+v).toFixed(d==null?0:d)+'%';}
@@ -3499,14 +3499,14 @@ function renderBrief(){
     kc('Sales',L(G.v),bPct(G.dp)+' of day target ('+L(G.dt)+')',G.dp==null?'':G.dp>=100?'grn':'red')+
     kc('vs LY same day',bGr(G.gr),G.ly?'LY '+L(G.ly):'no LY data',G.gr==null?'':G.gr>=0?'grn':'red')+
     kc('Walk-ins',N(G.w),G.lw?'LY '+N(G.lw)+' ('+bGr((G.lwN/G.lw-1)*100)+' like-for-like)':'')+
-    kc('Conversion',bPct(G.conv,1),G.ct?'target '+bPct(G.ct,1):'',G.conv==null||!G.ct?'':G.conv>=G.ct?'grn':'red')+
+    kc('Conversion',bPct(G.conv,1),(G.ct?'target '+bPct(G.ct,1):'')+(G.noW.length?' · excl. '+G.noW.length+' store'+(G.noW.length>1?'s':'')+' with no walk-ins':''),G.conv==null||!G.ct?'':G.conv>=G.ct?'grn':'red')+
     kc('Bills · ABV',N(G.b)+' · '+(G.abv?LA(Math.round(G.abv)):'—'),'UPT '+(G.upt?G.upt.toFixed(2):'—'))+
     kc('Loss of sale',LB.none?'—':(LB.live?N(G.loss):'—'),LB.none?(lossURL()?'loading…':'not connected'):LB.live?(G.w&&G.loss?(G.loss/G.w*100).toFixed(1)+' per 100 walk-ins':'entries logged'):'day detail needs live sheet',G.loss?'red':'')+'</div>';
   h+='<div class="sh"><span class="sh-t">Month to date (to '+lossEsc(dlbl)+')</span><div class="sh-l"></div></div><div class="krow">'+
     kc('MTD sales',L(G.mtd),bPct(G.ach)+' of '+L(G.tg),G.ach==null?'':'')+
     kc('Projection',G.tg?L(G.mtd/(i+1)*totalDays):'—',G.tg?bPct(G.mtd/(i+1)*totalDays/G.tg*100)+' of target':'',G.tg?(G.mtd/(i+1)*totalDays>=G.tg?'grn':'red'):'')+
     kc('Needed / day',left>0?L(G.need):'—',left+' days left · run-rate '+L(G.mtd/(i+1)),left>0&&G.need>G.mtd/(i+1)*1.1?'red':'')+
-    kc('MTD conversion',bPct(G.mw?G.mb/G.mw*100:null,1),N(G.mb)+' bills ÷ '+N(G.mw)+' walk-ins')+
+    kc('MTD conversion',bPct(G.mconv,1),N(G.mbc)+' bills ÷ '+N(G.mw)+' walk-ins'+(G.mb>G.mbc?' (days without walk-ins left out)':''))+
     kc('MTD loss of sale',LB.none?'—':N(G.lossM),G.mw&&G.lossM?(G.lossM/G.mw*100).toFixed(1)+' per 100 walk-ins':'')+'</div>';
   // CM summary when looking at Region or an RM
   if(BRIEF_GRP==='ALL'||BRIEF_GRP.indexOf('RM|')===0){
@@ -3524,7 +3524,7 @@ function renderBrief(){
   function box(t,c,body){return '<div style="flex:1;min-width:220px;border:1px solid var(--border);border-radius:8px;padding:8px 12px;"><div style="font-size:11px;font-weight:800;color:'+c+';text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">'+t+'</div>'+body+'</div>';}
   h+='<div class="sh"><span class="sh-t">Talking points</span><div class="sh-l"></div></div><div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;">'+
     box('🏆 Top performers','#16a34a',li(sold.filter(function(r){return r.dp>=100;}).slice(0,3),function(r){return bPct(r.dp)+' of day target · '+L(r.v);}))+
-    box('⚠ Below day target','#dc2626',li(sold.slice(-3).reverse().filter(function(r){return r.dp<100;}),function(r){return bPct(r.dp)+' · '+L(r.v);})+(none.length?'<div style="font-size:11px;color:#b26a00;padding-top:4px;">No sales entered: '+none.map(function(r){return r.code;}).join(', ')+'</div>':''))+
+    box('⚠ Below day target','#dc2626',li(sold.slice(-3).reverse().filter(function(r){return r.dp<100;}),function(r){return bPct(r.dp)+' · '+L(r.v);})+(none.length?'<div style="font-size:11px;color:#b26a00;padding-top:4px;">No sales entered: '+none.map(function(r){return r.code;}).join(', ')+'</div>':'')+(G.noW.length?'<div style="font-size:11px;color:#b26a00;padding-top:4px;">No walk-ins entered: '+G.noW.join(', ')+'</div>':''))+
     box('🎯 Conversion below target','#d97706',li(convLow.slice(0,4),function(r){return bPct(r.conv,1)+' vs '+bPct(r.ct,1)+' ('+r.w+' walk-ins)';}))+
     box('📉 Loss of sale','#dc2626',!LB.live?'<div style="font-size:11px;color:#9ca3af;">'+(lossURL()?'Loading the loss sheet…':'Connect the Loss of Sale sheet to see day entries.')+'</div>':
       li(lossHi.slice(0,4),function(r){return r.loss+' entr'+(r.loss>1?'ies':'y')+' · '+lossEsc(lossTop(r.lossR));})+
@@ -3548,7 +3548,7 @@ function renderBrief(){
   // WhatsApp / copy text
   var t='*Morning Brief — '+who+' — '+dlbl+'*\n'+
     'Sales: '+L(G.v)+' ('+bPct(G.dp)+' of day tgt)'+(G.gr!=null?' · vs LY '+bGr(G.gr):'')+'\n'+
-    'Walk-ins: '+N(G.w)+(G.lw?' (vs LY '+bGr((G.lwN/G.lw-1)*100)+')':'')+' · Conv '+bPct(G.conv,1)+(G.ct?' (tgt '+bPct(G.ct,1)+')':'')+'\n'+
+    'Walk-ins: '+N(G.w)+(G.lw?' (vs LY '+bGr((G.lwN/G.lw-1)*100)+')':'')+' · Conv '+bPct(G.conv,1)+(G.ct?' (tgt '+bPct(G.ct,1)+')':'')+'\n'+(G.noW.length?'No walk-ins entered: '+G.noW.join(', ')+'\n':'')+
     'Bills: '+N(G.b)+' · ABV '+(G.abv?LA(Math.round(G.abv)):'—')+' · UPT '+(G.upt?G.upt.toFixed(2):'—')+'\n'+
     (LB.live?'Loss of sale: '+G.loss+(tR.length?' (top: '+tR[0][0]+')':'')+'\n':'')+
     'MTD: '+L(G.mtd)+' / '+L(G.tg)+' ('+bPct(G.ach)+') · Proj '+(G.tg?bPct(G.mtd/(i+1)*totalDays/G.tg*100):'—')+(left>0?' · Need '+L(G.need)+'/day':'')+'\n'+
