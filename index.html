@@ -3449,11 +3449,11 @@ function briefRow(s,i,lossBy){
   var cu=(s.code||'').toUpperCase(),kt=s.kpiTargets||{};
   var v=(s.daySales||[])[i]||0,b=(s.dayBills||[])[i]||0,w=(s.dayWalkIns||[])[i]||0,q=(s.dayQty||[])[i]||0;
   var ly=(L2L_DATA&&L2L_DATA[activeSheet]&&L2L_DATA[activeSheet][cu]||[])[i]||0,lw=(WLY_DATA&&WLY_DATA[activeSheet]&&WLY_DATA[activeSheet][cu]||[])[i]||0;
-  var mtd=0,mb=0,mw=0,mbc=0;for(var d=0;d<=i;d++){var dw_=(s.dayWalkIns||[])[d]||0,db_=(s.dayBills||[])[d]||0;mtd+=(s.daySales||[])[d]||0;mb+=db_;mw+=dw_;if(dw_)mbc+=db_;}   // mbc: bills on days walk-ins were entered
+  var mtd=0,mb=0,mw=0,mbc=0,wMiss=0;for(var d=0;d<=i;d++){var dw_=(s.dayWalkIns||[])[d]||0,db_=(s.dayBills||[])[d]||0,ds_=(s.daySales||[])[d]||0;mtd+=ds_;mb+=db_;mw+=dw_;if(dw_)mbc+=db_;else if(ds_)wMiss++;}   // mbc: bills on days walk-ins were entered; wMiss: days with sales but walk-ins not updated
   var tg=s.noTarget?0:(s.target||0),dt=tg/totalDays,left=totalDays-(i+1);
   var L=lossBy[cu]||{day:0,mtd:0,r:{}};
   return {s:s,code:cu,v:v,b:b,w:w,q:q,ly:ly,lw:lw,dt:dt,dp:dt?v/dt*100:null,conv:w?b/w*100:null,ct:(kt.conversion>0&&kt.conversion<=100)?kt.conversion:null,
-    wt:kt.walkIns||0,abv:b?v/b:null,upt:b&&q?q/b:null,mtd:mtd,mb:mb,mw:mw,mbc:mbc,tg:tg,ach:tg?mtd/tg*100:null,proj:tg?mtd/(i+1)*totalDays/tg*100:null,
+    wt:kt.walkIns||0,abv:b?v/b:null,upt:b&&q?q/b:null,mtd:mtd,mb:mb,mw:mw,mbc:mbc,wMiss:wMiss,tg:tg,ach:tg?mtd/tg*100:null,proj:tg?mtd/(i+1)*totalDays/tg*100:null,
     need:left>0&&tg>mtd?(tg-mtd)/left:0,loss:L.day,lossM:L.mtd,lossR:L.r};
 }
 // Loss-of-sale entries per store: on day i, and month-to-day i; plus the day's reasons / categories / products
@@ -3495,6 +3495,12 @@ function renderBrief(){
   var tR=tally(function(e){return e.r;}),tC=tally(function(e){return e.cat;}),tP=tally(function(e){return e.sc;});
   function kc(l,v,s,cls){return '<div class="kc '+(cls||'')+'"><div class="kl">'+l+'</div><div class="kv">'+v+'</div><div class="ks">'+(s||'')+'</div></div>';}
   var h='<div style="font-size:13px;font-weight:800;margin:2px 0 10px;">☀ '+lossEsc(who)+' · '+lossEsc(dlbl)+' <span style="font-weight:400;color:var(--text2);font-size:11px;">· day '+(i+1)+' of '+totalDays+' · '+rows.length+' stores</span></div>';
+  // Zero walk-ins with sales = store hasn't updated its data — call it out first
+  var noUpd=rows.filter(function(r){return r.v>0&&!r.w;}),noSale=rows.filter(function(r){return !r.v;}),chronic=rows.filter(function(r){return r.wMiss>1;}).sort(function(a,b){return b.wMiss-a.wMiss;});
+  if(noUpd.length||noSale.length)h+='<div style="background:#fee2e2;border:1.5px solid #f87171;color:#991b1b;border-radius:8px;padding:9px 14px;margin:0 0 12px;font-size:12px;line-height:1.6;"><b>⚠ Store data not updated for '+lossEsc(dlbl)+'</b>'+
+    (noUpd.length?'<br><b>Walk-ins not updated ('+noUpd.length+'):</b> '+noUpd.map(function(r){return r.code+' <span style="opacity:.7;">('+lossEsc(r.s.cm||'')+')</span>';}).join(', ')+' — sales entered but walk-ins 0, so conversion can&#39;t be measured':'')+
+    (noSale.length?'<br><b>No sales entered ('+noSale.length+'):</b> '+noSale.map(function(r){return r.code;}).join(', '):'')+
+    (chronic.length?'<br><span style="opacity:.85;">Walk-ins missing on several days this month: '+chronic.slice(0,8).map(function(r){return r.code+' '+r.wMiss+'d';}).join(', ')+'</span>':'')+'</div>';
   h+='<div class="sh"><span class="sh-t">Day performance</span><div class="sh-l"></div></div><div class="krow">'+
     kc('Sales',L(G.v),bPct(G.dp)+' of day target ('+L(G.dt)+')',G.dp==null?'':G.dp>=100?'grn':'red')+
     kc('vs LY same day',bGr(G.gr),G.ly?'LY '+L(G.ly):'no LY data',G.gr==null?'':G.gr>=0?'grn':'red')+
@@ -3535,11 +3541,11 @@ function renderBrief(){
   rows.sort(function(a,b){return (b.dp==null?-1:b.dp)-(a.dp==null?-1:a.dp);});
   h+='<div class="sh"><span class="sh-t">Stores — '+lossEsc(dlbl)+'</span><div class="sh-l"></div><button class="dl" onclick="dlT(\'t-brief\',\'MorningBrief\')">&#8595; CSV</button></div><div class="tw"><table id="t-brief"><thead><tr>'+
     ['Store','CM','Day sales','% day tgt','Sales LY','vs LY','Walk-ins','W-ins LY','Bills','Conv%','Conv tgt','ABV','UPT','Loss','Top loss reason','MTD ach%','Proj%','Need/day'].map(function(t,k){return '<th'+(k>1&&k!==14?' class="r"':'')+' onclick="srt(\'t-brief\','+k+')">'+t+'</th>';}).join('')+'</tr></thead><tbody>'+
-    rows.map(function(r){var gr=r.ly&&r.v?(r.v/r.ly-1)*100:null;
-      return '<tr style="cursor:pointer;" onclick="openDrill(\''+r.s.code+'\')"><td style="font-weight:700;color:#3b82f6;">'+r.code+'</td><td style="font-size:11px;">'+lossEsc(r.s.cm||'')+'</td>'+
+    rows.map(function(r){var gr=r.ly&&r.v?(r.v/r.ly-1)*100:null,nu=r.v>0&&!r.w;
+      return '<tr style="cursor:pointer;'+(nu?'background:#fef2f2;':'')+'" onclick="openDrill(\''+r.s.code+'\')"'+(nu?' title="Walk-ins not updated"':'')+'><td style="font-weight:700;color:#3b82f6;">'+r.code+(nu?' <span style="color:#dc2626;">&#9888;</span>':'')+'</td><td style="font-size:11px;">'+lossEsc(r.s.cm||'')+'</td>'+
         '<td class="r" style="font-weight:600;">'+(r.v?L(r.v):'—')+'</td><td class="r '+(r.dp==null||!r.v?'':pc(Math.round(r.dp)))+'">'+(r.v?bPct(r.dp):'—')+'</td>'+
         '<td class="r" style="color:var(--text3);">'+(r.ly?L(r.ly):'—')+'</td><td class="r '+(gr==null?'':gr>=0?'gv':'rv')+'">'+bGr(gr)+'</td>'+
-        '<td class="r">'+(r.w||'—')+'</td><td class="r" style="color:var(--text3);">'+(r.lw||'—')+'</td><td class="r">'+(r.b||'—')+'</td>'+
+        (nu?'<td class="r" style="color:#dc2626;font-weight:700;white-space:nowrap;">Not updated</td>':'<td class="r">'+(r.w||'—')+'</td>')+'<td class="r" style="color:var(--text3);">'+(r.lw||'—')+'</td><td class="r">'+(r.b||'—')+'</td>'+
         '<td class="r '+(r.conv==null||!r.ct?'':r.conv>=r.ct?'gv':'rv')+'">'+bPct(r.conv,1)+'</td><td class="r" style="color:#9ca3af;">'+bPct(r.ct,1)+'</td>'+
         '<td class="r">'+(r.abv?LA(Math.round(r.abv)):'—')+'</td><td class="r">'+(r.upt?r.upt.toFixed(2):'—')+'</td>'+
         '<td class="r" style="font-weight:700;color:'+(r.loss?'#dc2626':'#9ca3af')+';">'+(LB.live?(r.loss||'·'):'—')+'</td><td style="font-size:11px;">'+(r.loss?lossEsc(lossTop(r.lossR)):'')+'</td>'+
@@ -3548,7 +3554,7 @@ function renderBrief(){
   // WhatsApp / copy text
   var t='*Morning Brief — '+who+' — '+dlbl+'*\n'+
     'Sales: '+L(G.v)+' ('+bPct(G.dp)+' of day tgt)'+(G.gr!=null?' · vs LY '+bGr(G.gr):'')+'\n'+
-    'Walk-ins: '+N(G.w)+(G.lw?' (vs LY '+bGr((G.lwN/G.lw-1)*100)+')':'')+' · Conv '+bPct(G.conv,1)+(G.ct?' (tgt '+bPct(G.ct,1)+')':'')+'\n'+(G.noW.length?'No walk-ins entered: '+G.noW.join(', ')+'\n':'')+
+    'Walk-ins: '+N(G.w)+(G.lw?' (vs LY '+bGr((G.lwN/G.lw-1)*100)+')':'')+' · Conv '+bPct(G.conv,1)+(G.ct?' (tgt '+bPct(G.ct,1)+')':'')+'\n'+(G.noW.length?'⚠ Walk-ins NOT UPDATED: '+G.noW.join(', ')+'\n':'')+
     'Bills: '+N(G.b)+' · ABV '+(G.abv?LA(Math.round(G.abv)):'—')+' · UPT '+(G.upt?G.upt.toFixed(2):'—')+'\n'+
     (LB.live?'Loss of sale: '+G.loss+(tR.length?' (top: '+tR[0][0]+')':'')+'\n':'')+
     'MTD: '+L(G.mtd)+' / '+L(G.tg)+' ('+bPct(G.ach)+') · Proj '+(G.tg?bPct(G.mtd/(i+1)*totalDays/G.tg*100):'—')+(left>0?' · Need '+L(G.need)+'/day':'')+'\n'+
