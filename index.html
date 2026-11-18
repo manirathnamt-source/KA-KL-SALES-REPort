@@ -3303,14 +3303,20 @@ function rmkLoad(){
 }
 function rmkStatus(t){var e=document.getElementById('rmk-status');if(e)e.textContent=t;}
 function rmkSelect(id){rmkSel=id;rmkRender();}
+// Period: 'closed' = completed months only (no projection), 'todate' = H2 to date with the current month projected
+var RMK_PERIOD='closed';
+function rmkSetPeriod(p){RMK_PERIOD=p;rmkRender();}
+function rmkClosedMonths(){return rmkMonthsToDate().filter(function(m){return !rmkIsCurrent(m);});}
+function rmkPeriodMonths(){var c=rmkClosedMonths();return (RMK_PERIOD==='closed'&&c.length)?c:rmkMonthsToDate();}
+function rmkMLbl(m){return m.charAt(0)+m.slice(1).toLowerCase();}
 
-// Per-store H2-to-date figures; current month run-rated to month end
-function rmkStoreRows(){
-  var ms=rmkMonthsToDate(),rows={};
+// Per-store figures for the given months (default: the selected period); current month run-rated to month end
+function rmkStoreRows(ms){
+  ms=ms||rmkPeriodMonths();var rows={};
   Object.keys(RMK_STORES).forEach(function(c){
     var s=RMK_STORES[c];
     rows[c]={code:c,name:s[0],rm:s[1],cm:s[2],coh:s[3],bud:0,budH2:s[4].reduce(function(a,b){return a+b;},0),lyH2:s[5],
-      sal:0,proj:0,bil:0,bilP:0,wlk:0,wlkP:0,wt:0,ly:0,months:0};
+      sal:0,proj:0,bil:0,bilC:0,bilP:0,wlk:0,wlkP:0,wt:0,ly:0,months:0};
   });
   ms.forEach(function(m){
     var mi=RMK_MONTHS.indexOf(m),D=RMK_DATA[m],cur=rmkIsCurrent(m);
@@ -3322,6 +3328,8 @@ function rmkStoreRows(){
       var f=(cur&&s.daysCount)?D.totalDays/s.daysCount:1;
       r.sal+=s.mtdSales||0;r.proj+=(s.mtdSales||0)*f;
       r.bil+=s.mtdBills||0;r.bilP+=(s.mtdBills||0)*f;
+      // conversion counts only days the store entered walk-ins (0 walk-ins = not updated)
+      if(s.dayWalkIns&&s.dayBills){s.dayBills.forEach(function(b,d){if(s.dayWalkIns[d])r.bilC+=b||0;});}else r.bilC+=s.mtdBills||0;
       r.wlk+=s.mtdWalkIns||0;r.wlkP+=(s.mtdWalkIns||0)*f;
       r.wt+=((s.kpiTargets||{}).walkIns)||0;r.months++;
     });
@@ -3330,7 +3338,7 @@ function rmkStoreRows(){
 }
 function rmkBand(a,bands){a=Math.round(a*1e4)/1e4;for(var i=0;i<bands.length;i++)if(a>=bands[i][0]-1e-9)return bands[i][1];return 0;}
 function rmkAgg(list){
-  var g={bud:0,budH2:0,lyH2:0,sal:0,proj:0,bil:0,bilP:0,wlk:0,wlkP:0,wt:0,ly:0,n:list.length};
+  var g={bud:0,budH2:0,lyH2:0,sal:0,proj:0,bil:0,bilC:0,bilP:0,wlk:0,wlkP:0,wt:0,ly:0,n:list.length};
   list.forEach(function(r){for(var k in g)if(k!=='n')g[k]+=r[k];});
   g.wAch=g.wt?g.wlkP/g.wt:null;                       // walk-in achievement (projected)
   g.rest=g.bud*Math.min(1,g.wAch==null?1:g.wAch);     // restated target — downward only
@@ -3349,15 +3357,20 @@ function rmkRender(){
   if(!activeURL){el.innerHTML='<div style="padding:18px;color:#9ca3af;">Load the Apps Script URL first (top bar ▶ Load).</div>';return;}
   var ms=rmkMonthsToDate();
   if(!ms.length){el.innerHTML='<div style="padding:18px;color:#9ca3af;">H2 starts in September 2026.</div>';return;}
-  var rows=rmkStoreRows();
+  var pm=rmkPeriodMonths(),closed=rmkClosedMonths();
+  var rows=rmkStoreRows(pm);
   var summary=RMK_PEOPLE.map(function(p){return rmkScore(p,rows);});
   var P=RMK_PEOPLE.filter(function(p){return p.id===rmkSel;})[0]||RMK_PEOPLE[0];
   var sc=rmkScore(P,rows);
-  var cur=ms.filter(rmkIsCurrent)[0];
-  var period='Sep → '+ms[ms.length-1].charAt(0)+ms[ms.length-1].slice(1).toLowerCase()+(cur?' (current month projected to month end)':'');
+  var cur=pm.filter(rmkIsCurrent)[0];
+  var rng=function(a){return rmkMLbl(a[0])+(a.length>1?'–'+rmkMLbl(a[a.length-1]):'');};
+  var period=rng(pm)+(cur?' (current month projected to month end)':' (completed months, actuals only)');
   var missing=ms.filter(function(m){return !RMK_DATA[m];});
 
-  var h='<div style="font-size:11px;color:var(--text2);margin:4px 0 10px;">Period: <b>'+period+'</b>'+(missing.length?' · <span class="rv">no data yet for '+missing.join(', ')+'</span>':'')+'</div>';
+  var h='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:4px 0 10px;"><span style="font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Rate on:</span>'+
+    (closed.length?'<button class="wkbtn'+(RMK_PERIOD==='closed'?' active':'')+'" onclick="rmkSetPeriod(\'closed\')">'+rng(closed)+' — completed months</button>':'')+
+    '<button class="wkbtn'+(RMK_PERIOD==='todate'||!closed.length?' active':'')+'" onclick="rmkSetPeriod(\'todate\')">H2 to date'+(ms.some(rmkIsCurrent)?' ('+rmkMLbl(ms[ms.length-1])+' projected)':'')+'</button>'+
+    '<span style="font-size:11px;color:var(--text2);margin-left:6px;">Period: <b>'+period+'</b>'+(missing.length?' · <span class="rv">no data yet for '+missing.join(', ')+'</span>':'')+'</span></div>';
   // Summary strip — all six people
   h+='<div class="sh"><span class="sh-t">Scorecard summary</span><div class="sh-l"></div></div><div class="tw"><table><thead><tr><th>Name</th><th>Role</th><th class="r">Stores</th><th class="r">LY-store Sales Ach</th><th class="r">SSSG Ach</th><th class="r">Conv%</th><th class="r">Conv Tgt</th><th class="r">Prime Ach</th><th class="r">W-in Ach</th><th class="r">Score (rated rows)</th><th class="r">Weight rated</th></tr></thead><tbody>'+
     summary.map(function(s){var k=s.k;return '<tr style="cursor:pointer;'+(s.p.id===rmkSel?'background:var(--blue-bg,#eff6ff);':'')+'" onclick="rmkSelect(\''+s.p.id+'\')"><td style="font-weight:700;color:#3b82f6;">'+s.p.id+'</td><td>'+s.p.role+(s.p.rm?' · '+s.p.rm:'')+'</td><td class="r">'+s.all.n+'</td>'+
@@ -3375,7 +3388,7 @@ function rmkRender(){
       a:L(k.lfl.proj)+' vs restated '+L(k.lfl.rest)+' · growth vs LY '+(k.lfl.ly?rmkPct(k.lfl.proj/k.lfl.ly-1):'—'),p:rmkPct(k.lfl.ach),r:sc.r.sssg},
     {l:'Walk-in achievement vs Marketing target',w:null,t:N(k.lfl.wt+k.ly.wt),a:N(Math.round(sc.all.wlkP))+' projected',p:rmkPct(sc.all.wAch),r:'ref'},
     {g:'2. Improve Customer & Store Performance',l:'Store Conversion — LFL stores',w:0.25,t:rmkPct(P.conv,2)+' <span style="color:#9ca3af;">(LY held = '+rmkPct(P.conv/1.05,2)+')</span>',
-      a:N(Math.round(k.lfl.bil))+' bills ÷ '+N(Math.round(k.lfl.wlk))+' walk-ins',p:rmkPct(sc.conv,2),r:sc.r.conv}
+      a:N(Math.round(k.lfl.bilC))+' bills ÷ '+N(Math.round(k.lfl.wlk))+' walk-ins'+(k.lfl.bil>k.lfl.bilC?' <span style="color:#9ca3af;">(days without walk-ins left out)</span>':''),p:rmkPct(sc.conv,2),r:sc.r.conv}
   ];
   if(P.role==='RM'){
     kr.push({g:'3. Training',l:'OJT (≥ 90% coverage) + Mystery Audit & Audit (≥ 85%)',w:0.20,t:'≥ 90% / ≥ 85%',a:'—',p:'—',r:null});
@@ -3396,12 +3409,36 @@ function rmkRender(){
     }).join('')+
     '<tr class="ft"><td>Score on rated rows</td><td class="r">'+Math.round(sc.wRated*100)+'%</td><td colspan="3" style="font-weight:400;">'+(sc.wRated<1?'Pending rows carry no score yet':'')+'</td><td></td><td class="r">'+rmkPct(sc.score,0)+'</td></tr></tbody></table></div>';
 
+  // Month-by-month trend: each month rated on its own, plus the completed months together
+  var cols=ms.map(function(m){return {l:rmkMLbl(m)+(rmkIsCurrent(m)?' (proj.)':''),ms:[m]};});
+  if(closed.length>1)cols.push({l:rng(closed)+' combined',ms:closed,tot:true});
+  var T=cols.map(function(c){var rw=rmkStoreRows(c.ms);return {c:c,rw:rw,sc:rmkScore(P,rw)};});
+  function arrow(cur,prev){if(cur==null||prev==null||cur===prev)return '';return cur>prev?' <span class="gv">&#9650;</span>':' <span class="rv">&#9660;</span>';}
+  function tcell(ach,rat,prev,fmt){return '<td class="r">'+(ach==null?'—':(fmt||rmkPct)(ach))+(rat==null?'':' ('+rmkRating(rat)+')')+arrow(rat,prev)+'</td>';}
+  var TR=[];
+  if(k.ly.n)TR.push({l:'Sales vs Budget — LY stores',f:function(t){return [t.sc.k.ly.ach,t.sc.r.ly];}});
+  TR.push({l:'SSSG — LFL stores (vs restated budget)',f:function(t){return [t.sc.k.lfl.ach,t.sc.r.sssg];}});
+  TR.push({l:'Growth vs LY — LFL stores',f:function(t){var g=t.sc.k.lfl;return [g.ly?g.proj/g.ly-1:null,null];},fmt:function(v){return (v>=0?'+':'')+(v*100).toFixed(1)+'%';}});
+  TR.push({l:'Conversion — LFL (target '+rmkPct(P.conv,2)+')',f:function(t){return [t.sc.conv,t.sc.r.conv];},fmt:function(v){return rmkPct(v,2);}});
+  TR.push({l:'Prime stores',f:function(t){return [t.sc.k.prime.ach,t.sc.r.prime];}});
+  TR.push({l:'Walk-in achievement (ref)',f:function(t){return [t.sc.all.wAch,null];}});
+  h+='<div class="sh" style="margin-top:16px;"><span class="sh-t">Trend — '+P.id+' (each month rated on its own)</span><div class="sh-l"></div></div>'+
+    '<div class="tw"><table><thead><tr><th>KPI</th>'+cols.map(function(c){return '<th class="r"'+(c.tot?' style="background:var(--primary-bg);"':'')+'>'+c.l+'</th>';}).join('')+'</tr></thead><tbody>'+
+    TR.map(function(row){var prev=null;return '<tr><td>'+row.l+'</td>'+T.map(function(t,j){var v=row.f(t);var cell=tcell(v[0],v[1],t.c.tot?null:prev,row.fmt);if(!t.c.tot)prev=v[1];return cell;}).join('')+'</tr>';}).join('')+
+    '<tr class="ft"><td>Score on rated rows</td>'+T.map(function(t,j){var p=j&&!t.c.tot?T[j-1].sc.score:null;return '<td class="r '+pc(Math.round(t.sc.score*100))+'">'+rmkPct(t.sc.score,0)+(p==null||Math.round(p*100)===Math.round(t.sc.score*100)?'':(t.sc.score>p?' <span class="gv">&#9650;</span>':' <span class="rv">&#9660;</span>'))+'</td>';}).join('')+'</tr></tbody></table></div>';
+  h+='<div style="font-size:10px;color:#9ca3af;margin-top:6px;line-height:1.6;">Month columns use the KPI workbook&#39;s month-wise budget phasing, which can differ from the store monthly targets — judge the final rating on the full Sep–Mar period. Conversion counts only days with walk-ins entered; the last 2 days&#39; walk-ins are provisional until duplicates are removed.</div>';
+  // Score trend for everyone
+  h+='<div class="sh" style="margin-top:16px;"><span class="sh-t">Score trend — all managers</span><div class="sh-l"></div></div>'+
+    '<div class="tw"><table><thead><tr><th>Name</th><th>Role</th>'+cols.map(function(c){return '<th class="r"'+(c.tot?' style="background:var(--primary-bg);"':'')+'>'+c.l+'</th>';}).join('')+'</tr></thead><tbody>'+
+    RMK_PEOPLE.map(function(p){var prev=null;return '<tr style="cursor:pointer;'+(p.id===rmkSel?'background:var(--blue-bg,#eff6ff);':'')+'" onclick="rmkSelect(\''+p.id+'\')"><td style="font-weight:700;color:#3b82f6;">'+p.id+'</td><td>'+p.role+'</td>'+
+      T.map(function(t){var s=rmkScore(p,t.rw).score,a=t.c.tot||prev==null||Math.round(prev*100)===Math.round(s*100)?'':(s>prev?' <span class="gv">&#9650;</span>':' <span class="rv">&#9660;</span>');if(!t.c.tot)prev=s;return '<td class="r '+pc(Math.round(s*100))+'">'+rmkPct(s,0)+a+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';
+
   // Store detail
   var list=sc.list.slice().sort(function(a,b){return (b.budH2)-(a.budH2);});
   h+='<div class="sh" style="margin-top:16px;"><span class="sh-t">Stores — '+P.id+'</span><div class="sh-l"></div><button class="dl" onclick="dlT(\'t-rmk-store\',\'RMKPI_'+P.id.replace(/\s+/g,'_')+'\')">&#8595; CSV</button></div>'+
     '<div class="tw"><table id="t-rmk-store"><thead><tr><th>Store</th>'+(P.role==='RM'?'<th>CM</th>':'')+'<th>Cohort</th><th class="r">Budget to date</th><th class="r">Sales</th><th class="r">Projected</th><th class="r">Ach%</th><th class="r">LY to date</th><th class="r">Growth</th><th class="r">W-ins Proj</th><th class="r">W-ins Tgt</th><th class="r">W-in Ach</th><th class="r">Conv%</th></tr></thead><tbody>'+
     list.map(function(r){
-      var a=r.bud?r.proj/r.bud:null,w=r.wt?r.wlkP/r.wt:null,cv=r.wlk?r.bil/r.wlk:null,gr=(r.coh==='LFL'&&r.ly)?r.proj/r.ly-1:null;
+      var a=r.bud?r.proj/r.bud:null,w=r.wt?r.wlkP/r.wt:null,cv=r.wlk?r.bilC/r.wlk:null,gr=(r.coh==='LFL'&&r.ly)?r.proj/r.ly-1:null;
       return '<tr><td style="font-weight:700;color:#3b82f6;">'+r.code+(P.prime.indexOf(r.code)>=0?' ★':'')+' <span style="font-size:10px;color:#9ca3af;font-weight:400;">'+r.name+'</span></td>'+(P.role==='RM'?'<td>'+r.cm+'</td>':'')+'<td>'+r.coh+'</td>'+
         '<td class="r">'+L(r.bud)+'</td><td class="r">'+L(r.sal)+'</td><td class="r">'+L(Math.round(r.proj))+'</td><td class="r '+(a!=null?pc(Math.round(a*100)):'')+'">'+rmkPct(a,0)+'</td>'+
         '<td class="r">'+(r.coh==='LFL'?L(r.ly):'—')+'</td><td class="r '+(gr!=null?(gr>=0?'gv':'rv'):'')+'">'+rmkPct(gr)+'</td>'+
@@ -3417,7 +3454,7 @@ function rmkScore(p,rows){
   var k={ly:rmkAgg(list.filter(function(r){return r.coh==='LY';})),lfl:rmkAgg(list.filter(function(r){return r.coh==='LFL';})),
     prime:rmkAgg(list.filter(function(r){return p.prime.indexOf(r.code)>=0;}))};
   var all=rmkAgg(list);
-  var conv=k.lfl.wlk?k.lfl.bil/k.lfl.wlk:null;
+  var conv=k.lfl.wlk?k.lfl.bilC/k.lfl.wlk:null;
   var r={ly:k.ly.n&&k.ly.ach!=null?rmkBand(k.ly.ach,RMK_SALES_BANDS):null,
     sssg:k.lfl.ach!=null?rmkBand(k.lfl.ach,RMK_SALES_BANDS):null,
     conv:conv!=null?rmkBand(conv/p.conv,RMK_CONV_BANDS):null,
